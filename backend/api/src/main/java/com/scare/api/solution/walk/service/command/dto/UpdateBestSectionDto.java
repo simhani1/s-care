@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 public class UpdateBestSectionDto {
 
 	private Long courseId;
-	private int maxStress;
-	private int minStress;
+	private double maxStress;
+	private double minStress;
 	private Double healingStressAvg;
 	private Integer startIdx;
 	private Integer endIdx;

@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import http.client
 import json
 import logging
@@ -13,12 +14,12 @@ from fastapi import FastAPI
 from services.stress_overview_service import build_stress_overview
 
 RABBITMQ_URL = os.environ.get('RABBITMQ_URL', 'amqp://scare:scare@localhost:5672/')
-SPRING_BASE_URL = os.environ.get('SPRING_BASE_URL', 'http://localhost:8080')
-INTERNAL_API_SECRET = os.environ.get('INTERNAL_API_SECRET', 'local-dev-only-internal-secret')
+REQUIRED_ENV = ('SPRING_BASE_URL', 'INTERNAL_API_SECRET')
+SPRING_BASE_URL = os.environ.get('SPRING_BASE_URL')
+INTERNAL_API_SECRET = os.environ.get('INTERNAL_API_SECRET')
 
 REQUEST_QUEUE = 'request_queue'
 DEAD_LETTER_QUEUE = 'request_queue.dlq'
-# Spring 의 RabbitMqConfig 와 인수가 하나라도 다르면 나중에 선언하는 쪽이 PRECONDITION_FAILED 로 거부된다.
 REQUEST_QUEUE_ARGUMENTS = {'x-dead-letter-exchange': '', 'x-dead-letter-routing-key': DEAD_LETTER_QUEUE}
 RETRY_DELAYS = (1, 2, 4)
 HTTP_TIMEOUT = 5
@@ -40,7 +41,6 @@ def analysis_result(data: dict) -> bytes:
 
 
 def put_result(course_id: int, payload: bytes) -> int | None:
-    """Spring 저장 API 의 HTTP 상태 코드. 연결 실패나 시간 초과면 None."""
     req = urllib.request.Request(
         f'{SPRING_BASE_URL}/internal/v1/walking/{course_id}/analysis-result', data=payload, method='PUT',
         headers={'Content-Type': 'application/json', 'X-Internal-Secret': INTERNAL_API_SECRET})
@@ -58,9 +58,14 @@ def is_permanent(status: int | None) -> bool:
     return status is not None and 400 <= status < 500 and status not in (408, 429)
 
 
-async def handle(message: IncomingMessage, put=put_result, sleep=asyncio.sleep):
+def is_config_error(status: int | None) -> bool:
+    return status in (401, 403)
+
+
+async def handle(message: IncomingMessage, halt, put=put_result, sleep=asyncio.sleep):
     """200 을 받은 뒤에만 ack 한다. 그 전에 워커가 죽으면 메시지가 큐로 돌아가 다시 전달되고,
-    중복 결과는 Spring 이 200 으로 흡수한다. 계산 실패와 4xx 는 다시 해도 같으므로 바로 데드레터로 보낸다."""
+    중복 결과는 Spring 이 200 으로 흡수한다. 계산 실패와 4xx 는 다시 해도 같으므로 바로 데드레터로 보낸다.
+    401/403 은 메시지가 아니라 비밀 설정 문제라 데드레터로 보내지 않고 halt 로 메시지를 돌려놓고 워커를 멈춘다."""
     course_id = None
     try:
         data = json.loads(message.body)
@@ -79,6 +84,11 @@ async def handle(message: IncomingMessage, put=put_result, sleep=asyncio.sleep):
             await message.ack()
             log.info('acked courseId=%s', course_id)
             return
+        if is_config_error(status):
+            log.error('Spring rejected INTERNAL_API_SECRET (status=%s), requeueing courseId=%s and stopping worker',
+                      status, course_id)
+            await halt(message)
+            return
         if is_permanent(status) or delay is None:
             break
         log.warning('retry courseId=%s in %ss', course_id, delay)
@@ -89,12 +99,22 @@ async def handle(message: IncomingMessage, put=put_result, sleep=asyncio.sleep):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    missing = [name for name in REQUIRED_ENV if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(f'required environment variables not set: {", ".join(missing)}')
     connection = await connect_robust(RABBITMQ_URL)
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=1)
     await channel.declare_queue(DEAD_LETTER_QUEUE, durable=True)
     request_queue = await channel.declare_queue(REQUEST_QUEUE, durable=True, arguments=REQUEST_QUEUE_ARGUMENTS)
-    await request_queue.consume(handle)
+
+    async def halt(message: IncomingMessage):
+        # 소비 취소나 연결 종료는 진행 중인 이 콜백을 기다려 멈추므로 곧바로 프로세스를 끝낸다.
+        # reject 프레임이 나가지 못해도 연결이 끊기면 브로커가 미확인 메시지를 되돌리고, 프로세스가 없으니 다시 받지 않는다.
+        await message.reject(requeue=True)
+        os._exit(1)
+
+    await request_queue.consume(functools.partial(handle, halt=halt))
     log.info('Listening on %s', REQUEST_QUEUE)
     yield
     await connection.close()

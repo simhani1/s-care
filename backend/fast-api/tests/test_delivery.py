@@ -7,6 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import main
 
+main.INTERNAL_API_SECRET = 'test-secret'
+
 WALK = {'courseId': 7, 'heartRates': [100 + (i % 7) for i in range(300)], 'walkingTime': 300}
 
 
@@ -51,8 +53,12 @@ def run(message):
     async def sleep(seconds):
         sleeps.append(seconds)
 
-    asyncio.run(main.handle(message, sleep=sleep))
+    asyncio.run(main.handle(message, halt=fail_halt, sleep=sleep))
     return sleeps
+
+
+async def fail_halt(message):
+    raise AssertionError('halt 가 불리면 안 된다')
 
 
 def test_acks_only_after_200_with_backoff():
@@ -78,12 +84,26 @@ def test_dead_letters_after_three_retries():
 
 
 def test_permanent_client_error_dead_letters_without_retry():
-    for status in (400, 403, 404):
+    for status in (400, 404):
         server = fake_spring([status])
         message = FakeMessage(WALK, server)
         assert run(message) == []
         server.shutdown()
         assert message.events == [('reject', False)] and len(server.requests) == 1, status
+
+
+def test_auth_failure_halts_without_dead_lettering():
+    for status in (401, 403):
+        server = fake_spring([status])
+        message = FakeMessage(WALK, server)
+        halted = []
+
+        async def halt(m):
+            halted.append(m)
+
+        asyncio.run(main.handle(message, halt=halt, sleep=lambda s: None))
+        server.shutdown()
+        assert halted == [message] and message.events == [] and len(server.requests) == 1, status
 
 
 def test_timeout_and_throttle_are_retried():
@@ -108,7 +128,7 @@ def test_calculation_error_dead_letters_without_calling_spring():
     calls = []
     for walk in ({**WALK, 'heartRates': [100, 101, 102]}, {**WALK, 'heartRates': [0] * 300}, {'courseId': 7}):
         message = FakeMessage(walk)
-        asyncio.run(main.handle(message, put=lambda *a: calls.append(a) or 200))
+        asyncio.run(main.handle(message, halt=fail_halt, put=lambda *a: calls.append(a) or 200))
         assert message.events == [('reject', False)], walk
     assert calls == []
 

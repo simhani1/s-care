@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.scare.api.member.repository.MemberRepository;
 import com.scare.api.solution.walk.domain.AnalysisStatus;
 import com.scare.api.solution.walk.domain.WalkingCourse;
+import com.scare.api.solution.walk.exception.InvalidAnalysisResultException;
 import com.scare.api.solution.walk.exception.NoWalkingCourseException;
 import com.scare.api.solution.walk.outbox.OutboxRepository;
 import com.scare.api.solution.walk.repository.WalkingCourseRepository;
@@ -23,8 +24,9 @@ class WalkingCommandServiceCompleteAnalysisTest {
 
 	private final WalkingCourseRepository courseRepository = mock(WalkingCourseRepository.class);
 	private final OutboxRepository outboxRepository = mock(OutboxRepository.class);
+	private final WalkingDetailRepository detailRepository = mock(WalkingDetailRepository.class);
 	private final WalkingCommandService service = new WalkingCommandService(mock(MemberRepository.class),
-		courseRepository, mock(WalkingDetailRepository.class), outboxRepository, new ObjectMapper());
+		courseRepository, detailRepository, outboxRepository, new ObjectMapper());
 
 	private final UpdateBestSectionDto result = UpdateBestSectionDto.builder()
 		.courseId(7L).maxStress(40).minStress(10).healingStressAvg(12.5).startIdx(60).endIdx(260).build();
@@ -49,6 +51,23 @@ class WalkingCommandServiceCompleteAnalysisTest {
 
 		assertThatCode(() -> service.completeAnalysis(result)).doesNotThrowAnyException();
 		then(courseRepository).should(never()).findById(any());
+	}
+
+	@Test
+	void 힐링_구간_끝이_좌표_수_이상이면_저장하지_않고_예외를_던진다() {
+		given(detailRepository.countLocations(7L)).willReturn(Optional.of(260L));
+
+		assertThatThrownBy(() -> service.completeAnalysis(result)).isInstanceOf(InvalidAnalysisResultException.class);
+		then(outboxRepository).should(never()).complete(any(), any());
+	}
+
+	@Test
+	void 좌표가_없는_코스는_인덱스_범위를_보지_않는다() {
+		given(detailRepository.countLocations(7L)).willReturn(Optional.of(0L));
+		given(outboxRepository.complete(eq(7L), any(LocalDateTime.class))).willReturn(1);
+		given(courseRepository.findById(7L)).willReturn(Optional.of(WalkingCourse.builder().build()));
+
+		assertThatCode(() -> service.completeAnalysis(result)).doesNotThrowAnyException();
 	}
 
 	@Test

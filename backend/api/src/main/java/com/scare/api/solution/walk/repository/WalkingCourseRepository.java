@@ -18,9 +18,8 @@ public interface WalkingCourseRepository extends JpaRepository<WalkingCourse, Lo
 
 	@Modifying
 	@Query("UPDATE WalkingCourse c SET c.analysisStatus = com.scare.api.solution.walk.domain.AnalysisStatus.FAILED, "
-		+ "c.updatedAt = :now WHERE c.analysisStatus = com.scare.api.solution.walk.domain.AnalysisStatus.ANALYZING "
-		+ "AND c.id IN (SELECT o.walkingCourseId FROM Outbox o "
-		+ "WHERE o.status = com.scare.api.solution.walk.outbox.OutboxStatus.FAILED)")
-	int failAnalyzingWithFailedOutbox(@Param("now") LocalDateTime now);
+		+ "c.updatedAt = :now WHERE c.id = :id "
+		+ "AND c.analysisStatus = com.scare.api.solution.walk.domain.AnalysisStatus.ANALYZING")
+	int failAnalyzing(@Param("id") Long id, @Param("now") LocalDateTime now);
 
 }

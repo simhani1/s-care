@@ -16,6 +16,7 @@ import com.scare.api.member.repository.MemberRepository;
 import com.scare.api.member.service.helper.MemberServiceHelper;
 import com.scare.api.solution.walk.domain.WalkingCourse;
 import com.scare.api.solution.walk.domain.WalkingDetail;
+import com.scare.api.solution.walk.exception.InvalidAnalysisResultException;
 import com.scare.api.solution.walk.exception.NoWalkingCourseException;
 import com.scare.api.solution.walk.exception.WalkingCourseDataSaveException;
 import com.scare.api.solution.walk.outbox.Outbox;
@@ -133,6 +134,10 @@ public class WalkingCommandService {
 	 * PENDING(발행 후 표시 전 릴레이 중단), FAILED(실패 처리 뒤 늦게 온 결과)도 완료로 받아들인다.
 	 */
 	public void completeAnalysis(UpdateBestSectionDto dto) {
+		long locations = walkingDetailRepository.countLocations(dto.getCourseId()).orElse(0L);
+		if (locations > 0 && dto.getEndIdx() >= locations) {
+			throw new InvalidAnalysisResultException("endIdx " + dto.getEndIdx() + " >= locations " + locations);
+		}
 		if (outboxRepository.complete(dto.getCourseId(), LocalDateTime.now()) == 0) {
 			if (!outboxRepository.existsByWalkingCourseId(dto.getCourseId())) {
 				throw new NoWalkingCourseException();

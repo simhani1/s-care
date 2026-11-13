@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.scare.api.core.template.response.BaseResponse;
 import com.scare.api.core.template.response.ResponseCode;
 import com.scare.api.solution.walk.controller.request.internal.AnalysisResultReq;
+import com.scare.api.solution.walk.exception.InvalidAnalysisResultException;
 import com.scare.api.solution.walk.exception.NoWalkingCourseException;
 import com.scare.api.solution.walk.service.command.WalkingCommandService;
 
@@ -29,6 +30,11 @@ public class InternalWalkingController {
 		@RequestBody AnalysisResultReq req) {
 		walkingCommandService.completeAnalysis(req.toDto(courseId));
 		return ResponseEntity.ok(BaseResponse.ofSuccess());
+	}
+
+	@ExceptionHandler(InvalidAnalysisResultException.class)
+	public ResponseEntity<BaseResponse<?>> handleInvalidAnalysisResult() {
+		return ResponseEntity.badRequest().body(BaseResponse.ofFail(ResponseCode.INVALID_ANALYSIS_RESULT));
 	}
 
 	@ExceptionHandler(NoWalkingCourseException.class)

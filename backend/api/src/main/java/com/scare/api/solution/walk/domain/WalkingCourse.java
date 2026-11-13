@@ -79,8 +79,8 @@ public class WalkingCourse extends BaseTimeEntity {
 		return this.healingStressAvg != 0.0;
 	}
 
-	public void updateBestSection(int maxStress, int minStress, Double healingStressAvg, Integer startIdx,
-		Integer endIdx) {
+	public void updateBestSection(double maxStress, double minStress, double healingStressAvg, int startIdx,
+		int endIdx) {
 		this.maxStress = maxStress;
 		this.minStress = minStress;
 		this.healingStressAvg = healingStressAvg;
