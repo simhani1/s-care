@@ -76,7 +76,7 @@
   - 구현(PR 4): 테이블 `outbox`(엔티티 `Outbox`, `OutboxRepository`). 컬럼 `outbox_id` PK, `walking_course_id` UNIQUE, `payload` JSON(워커가 읽는 `{"courseId", "heartRates", "walkingTime"}` 그대로), `status` 값 `PENDING` / `PUBLISHED` / `COMPLETED` / `FAILED`, `created_at`, `updated_at`. 인덱스 `(status, created_at)`.
 - S6. 단건 잠금 발행 함수를 둔다. `SELECT ... FOR UPDATE SKIP LOCKED` 로 행을 잡고, 발행 후 브로커 확인 응답을 받으면 발행됨으로 표시한다.
 - S7. `publisher-confirm-type` 을 켜고 확인 응답 대기에 3초 상한을 둔다.
-  - 구현(PR 4): `correlated` + `CorrelationData` future 를 3초 대기. `mandatory` 와 `publisher-returns` 를 켜서 라우팅되지 않아 반송된 메시지도 실패로 본다. 연결, 핸드셰이크, 채널 RPC 도 3초 상한이고 heartbeat 는 5초다. 브로커 연결은 트랜잭션을 열기 전에 맺어서, 한 번의 발행 시도가 행 잠금과 DB 커넥션을 쥐는 시간은 약 3초가 상한이다.
+  - 구현(PR 4): `correlated` + `CorrelationData` future 를 3초 대기. `mandatory` 와 `publisher-returns` 를 켜서 라우팅되지 않아 반송된 메시지도 실패로 본다. 연결, 핸드셰이크, 채널 RPC 도 3초 상한이고 heartbeat 는 5초다. 브로커 연결은 트랜잭션을 열기 전에 맺어서, 한 번의 발행 시도가 행 잠금과 DB 커넥션을 쥐는 시간은 보통 약 3초다. 연결 확인 직후 연결이 끊기면 트랜잭션 안에서 재연결하느라 더 길어질 수 있고, 브로커를 일시 정지시킨 측정에서 최대 6.3초가 나왔다.
 - S8. 커밋 직후 이벤트 리스너에서 새 트랜잭션(`REQUIRES_NEW`)으로 즉시 발행한다.
   - 구현(PR 4): 리스너는 아웃박스 ID 를 스레드 2개, 큐 100 의 실행기에 넘기기만 한다. 큐가 차면 버리고 스케줄러가 수거한다. 저장 요청은 브로커를 기다리지 않는다.
 - S9. 스케줄러가 생성 후 10초가 지난 발행 대기 행을 수거해 같은 함수로 발행한다.

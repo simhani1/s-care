@@ -39,7 +39,8 @@ public class OutboxRelayTrigger {
 	 */
 	private final ThreadPoolExecutor relayExecutor = new ThreadPoolExecutor(RELAY_THREADS, RELAY_THREADS,
 		0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(RELAY_QUEUE),
-		Thread.ofPlatform().name("outbox-relay-", 0).factory(), new ThreadPoolExecutor.DiscardPolicy());
+		Thread.ofPlatform().name("outbox-relay-", 0).factory(),
+		(task, executor) -> log.debug("[OutboxRelay] relay queue full, left for scheduler"));
 
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onSaved(OutboxSavedEvent event) {
