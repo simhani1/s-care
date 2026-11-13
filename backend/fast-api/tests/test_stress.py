@@ -16,7 +16,7 @@ def _brute_force(arr, length):
 def test_healing_section_matches_brute_force():
     rng = np.random.default_rng(7)
     cases = {
-        "앞쪽이 최저": [10] * 30 + [40] * 60,     # 예전 구현은 None 인덱스를 돌려줬다
+        "앞쪽이 최저": [10] * 30 + [40] * 60,
         "가운데가 최저": [40] * 30 + [10] * 30 + [40] * 30,
         "뒤쪽이 최저": [40] * 60 + [10] * 30,
         "랜덤": [int(x) for x in rng.integers(6, 60, 90)],
@@ -32,7 +32,6 @@ def test_ties_pick_earliest_section_even_with_float_rounding():
 
 
 def test_sparse_samples_do_not_yield_tiny_healing_section():
-    """5분을 걸었어도 심박이 드물게 들어와 샘플이 적으면 힐링 구간을 내지 않는다."""
     hr = make_walk(WINDOW_SIZE + 5, None, np.random.default_rng(6))
     overview = build_stress_overview(hr, walking_time=600)
     assert (overview.start_idx, overview.end_idx, overview.healing_stress_avg) == (0, 0, 0.0)
@@ -46,12 +45,11 @@ def test_window_reads_only_its_own_samples():
 
 
 def test_chunked_calculation_equals_batch():
-    """직전 window-1 개 샘플만 이어 붙이면 나눠 계산해도 일괄 계산과 같다."""
     hr = make_walk(500, None, np.random.default_rng(2))
     w = 60
     batch = get_windowed_stress_index(hr, w)
     chunked = []
-    for start in range(0, len(batch), 97):               # 임의 크기로 쪼갠다
+    for start in range(0, len(batch), 97):
         end = min(start + 97, len(batch))
         chunked += get_windowed_stress_index(hr[start:end + w - 1], w)
     assert chunked == batch

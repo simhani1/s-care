@@ -7,7 +7,6 @@ from fastapi import FastAPI
 
 from services.stress_overview_service import build_stress_overview
 
-# 접속 정보는 코드에 두지 않는다. 기본값은 backend/docker-compose.yml 의 로컬 브로커
 RABBITMQ_URL = os.environ.get('RABBITMQ_URL', 'amqp://scare:scare@localhost:5672/')
 
 

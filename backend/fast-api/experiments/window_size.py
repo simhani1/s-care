@@ -25,7 +25,7 @@ from services.stress_overview_service import find_healing_course_idx, locate_hea
 warnings.filterwarnings("ignore")
 
 WINDOWS = [20, 30, 45, 60, 90, 120, 180, 240, 300]
-CONTRASTS = {"아주 약함": 0.15, "약함": 0.2, "중간": 0.3, "강함": 0.5}   # 회복 구간(tension 0.1) 바깥의 tension
+CONTRASTS = {"아주 약함": 0.15, "약함": 0.2, "중간": 0.3, "강함": 0.5}
 SEEDS = int(sys.argv[1]) if len(sys.argv) > 1 else 40
 PREFIX = "누적(기존)"
 
@@ -40,14 +40,12 @@ def overlap(found, truth):
 
 
 def locate(hr, window):
-    """윈도우 방식으로 회복 구간을 찾아 샘플 인덱스 [start, end) 로 돌려준다."""
     stress = get_windowed_stress_index(hr, window)
     _, s, e = locate_healing_section(stress, min(window, len(hr)))
     return s, e + 1
 
 
 def locate_prefix(hr):
-    """기존 방식: 처음부터 i 번째까지 누적해서 계산. 탐색 버그는 고친 상태로 비교한다."""
     stress = [get_single_stress(hr[:i]) for i in range(4, len(hr) + 1)]
     _, s, e = find_healing_course_idx(stress)
     return s + 3, e + 3 + 1
@@ -84,7 +82,6 @@ def row(label, arr):
 
 
 def stationary(args):
-    """상태 변화가 없는 10분 산책. 점수가 일정해야 정상이다."""
     tension, seed = args
     hr = make_walk(600, None, np.random.default_rng(1000 + seed), base_tension=tension)
     out = {}

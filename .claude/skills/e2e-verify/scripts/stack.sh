@@ -1,6 +1,5 @@
 #!/bin/sh
 # 로컬 스택을 띄우고 내린다. 사용: stack.sh up | down | status | logs
-# 인프라는 docker compose, Spring 과 워커는 호스트 프로세스로 실행하고 로그와 pid 를 backend/.run 에 둔다.
 set -eu
 ROOT=$(git rev-parse --show-toplevel)
 BACKEND="$ROOT/backend"
@@ -16,7 +15,7 @@ stop() {
   done
 }
 
-wait_http() {  # url, 이름
+wait_http() {
   i=0
   until curl -s -o /dev/null "$1"; do
     i=$((i + 1))
@@ -36,13 +35,11 @@ case "${1:-}" in
     nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -Duser.timezone=Asia/Seoul -jar build/libs/api-0.0.1-SNAPSHOT.jar > "$RUN/spring.log" 2>&1 &
     echo $! > "$RUN/spring.pid"
     cd "$BACKEND/fast-api"
-    # numpy<2 는 Python 3.12 까지만 휠이 있다
     if [ ! -x .venv/bin/python ]; then
       if command -v uv >/dev/null; then uv venv -q --python 3.12 --seed .venv
       else "$(command -v python3.12 || command -v python3)" -m venv .venv; fi
     fi
     .venv/bin/pip install -q -r requirements.txt
-    # 워커의 print 출력이 버퍼에 갇히지 않게 한다
     PYTHONUNBUFFERED=1 nohup .venv/bin/uvicorn main:app --port 8000 > "$RUN/worker.log" 2>&1 &
     echo $! > "$RUN/worker.pid"
     wait_http http://localhost:8080/api-docs spring
