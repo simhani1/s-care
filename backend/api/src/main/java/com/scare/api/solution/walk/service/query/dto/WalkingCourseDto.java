@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.scare.api.core.util.DateConverter;
+import com.scare.api.solution.walk.domain.AnalysisStatus;
 import com.scare.api.solution.walk.domain.WalkingCourse;
 import com.scare.api.solution.walk.domain.WalkingDetail;
 
@@ -24,6 +25,7 @@ public class WalkingCourseDto {
 	private Integer endIdx;
 	private double maxStress;
 	private double minStress;
+	private AnalysisStatus analysisStatus;
 
 	public static WalkingCourseDto from(WalkingCourse walkingCourse, WalkingDetail walkingDetail) {
 		return WalkingCourseDto.builder()
@@ -34,6 +36,7 @@ public class WalkingCourseDto {
 			.endIdx(walkingCourse.getEndIdx())
 			.maxStress(walkingCourse.getMaxStress())
 			.minStress(walkingCourse.getMinStress())
+			.analysisStatus(walkingCourse.getAnalysisStatus())
 			.posList(
 				walkingDetail.getLocationData().stream()
 					.map(locationData -> Pos.builder()
@@ -54,6 +57,7 @@ public class WalkingCourseDto {
 			.endIdx(walkingCourse.getEndIdx())
 			.maxStress(walkingCourse.getMaxStress())
 			.minStress(walkingCourse.getMinStress())
+			.analysisStatus(walkingCourse.getAnalysisStatus())
 			.build();
 	}
 

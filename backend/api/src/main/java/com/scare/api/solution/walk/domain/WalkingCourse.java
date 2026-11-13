@@ -7,6 +7,8 @@ import com.scare.api.member.domain.Member;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -51,6 +53,10 @@ public class WalkingCourse extends BaseTimeEntity {
 	@Column(name = "finished_at", nullable = false)
 	private LocalDateTime finishedAt;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "analysis_status", nullable = false)
+	private AnalysisStatus analysisStatus;
+
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "member_id")
 	private Member member;
@@ -66,6 +72,7 @@ public class WalkingCourse extends BaseTimeEntity {
 		this.startedAt = startedAt;
 		this.finishedAt = finishedAt;
 		this.member = member;
+		this.analysisStatus = AnalysisStatus.ANALYZING;
 	}
 
 	public boolean hasHealingSection() {
@@ -79,6 +86,7 @@ public class WalkingCourse extends BaseTimeEntity {
 		this.healingStressAvg = healingStressAvg;
 		this.startIdx = startIdx;
 		this.endIdx = endIdx;
+		this.analysisStatus = AnalysisStatus.COMPLETED;
 	}
 
 }

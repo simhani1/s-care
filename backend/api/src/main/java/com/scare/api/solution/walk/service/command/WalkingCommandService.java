@@ -3,18 +3,24 @@ package com.scare.api.solution.walk.service.command;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.scare.api.infrastructure.rabbitmq.RabbitMqProducer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.scare.api.member.domain.Member;
 import com.scare.api.member.repository.MemberRepository;
 import com.scare.api.member.service.helper.MemberServiceHelper;
 import com.scare.api.solution.walk.domain.WalkingCourse;
 import com.scare.api.solution.walk.domain.WalkingDetail;
 import com.scare.api.solution.walk.exception.NoWalkingCourseException;
+import com.scare.api.solution.walk.exception.WalkingCourseDataSaveException;
+import com.scare.api.solution.walk.outbox.Outbox;
+import com.scare.api.solution.walk.outbox.OutboxRepository;
+import com.scare.api.solution.walk.outbox.OutboxStatus;
 import com.scare.api.solution.walk.repository.WalkingCourseRepository;
 import com.scare.api.solution.walk.repository.WalkingDetailRepository;
 import com.scare.api.solution.walk.service.command.dto.SaveWalkingCourseDto;
@@ -30,10 +36,11 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class WalkingCommandService {
 
-	private final RabbitMqProducer rabbitMqProducer;
 	private final MemberRepository memberRepository;
 	private final WalkingCourseRepository walkingCourseRepository;
 	private final WalkingDetailRepository walkingDetailRepository;
+	private final OutboxRepository outboxRepository;
+	private final ObjectMapper objectMapper;
 
 	public Long saveWalkingCourse(Long memberId, SaveWalkingCourseDto dto) {
 		log.info("[WalkingCommandService] 산책 코스 저장 시작, 산책 시간");
@@ -49,8 +56,23 @@ public class WalkingCommandService {
 		walkingLocations = walkingLocations.subList(0, minSize);
 		List<WalkingDetail.LocationPoint> locationPoints = processLocationData(walkingLocations);
 		Long courseId = saveWithoutStressData(dto, member, locationPoints);
-		rabbitMqProducer.sendMessage(courseId, walkingTime, heartRates);
+		outboxRepository.save(Outbox.builder()
+			.walkingCourseId(courseId)
+			.payload(analysisRequestPayload(courseId, walkingTime, heartRates))
+			.build());
 		return courseId;
+	}
+
+	private String analysisRequestPayload(Long courseId, long walkingTime, List<Double> heartRates) {
+		try {
+			return objectMapper.writeValueAsString(Map.of(
+				"courseId", courseId,
+				"heartRates", heartRates,
+				"walkingTime", walkingTime
+			));
+		} catch (JsonProcessingException e) {
+			throw new WalkingCourseDataSaveException();
+		}
 	}
 
 	private long getWalkingTime(LocalDateTime startedAt, LocalDateTime finishedAt) {
@@ -111,5 +133,6 @@ public class WalkingCommandService {
 			.orElseThrow(() -> new NoWalkingCourseException());
 		course.updateBestSection(dto.getMaxStress(), dto.getMinStress(), dto.getHealingStressAvg(), dto.getStartIdx(),
 			dto.getEndIdx());
+		outboxRepository.updateStatusByWalkingCourseId(course.getId(), OutboxStatus.COMPLETED, LocalDateTime.now());
 	}
 }

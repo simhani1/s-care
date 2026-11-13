@@ -40,7 +40,7 @@
 안드로이드 ──POST /api/v1/walking──▶ Spring
                                       │ 한 트랜잭션: 코스(분석 중) + 좌표(JSON) + 아웃박스(발행 대기)
                                       ▼
-                              릴레이: 커밋 직후 즉시 발행, 스케줄러가 보조
+                              릴레이: 10초 주기 스케줄러가 발행 대기 행을 발행
                                       │ 브로커 확인 응답 후 아웃박스 발행됨
                                       ▼
                               RabbitMQ request_queue ──(재시도 소진)──▶ 데드레터 큐
@@ -67,15 +67,19 @@
 - S2. 좌표는 코스 테이블이 아닌 별도 MySQL 테이블의 JSON 컬럼에 저장한다. 목록 조회가 좌표를 읽지 않게 하기 위함이다.
   - 구현(PR 3): 테이블 `walking_detail`, PK `walking_course_id`(코스 ID 를 그대로 쓰는 1:1, 자동 생성 아님), 좌표 `location_data` JSON NOT NULL. 원소는 `{"latitude", "longitude"}`. 엔티티 `WalkingDetail`, 리포지토리 `WalkingDetailRepository`(JpaRepository).
 - S3. 코스에 분석 상태 컬럼을 두고 저장 시 분석 중으로 기록한다.
+  - 구현(PR 4): `walking_course.analysis_status` NOT NULL, 값 `ANALYZING` / `COMPLETED` / `FAILED`(enum `AnalysisStatus`).
 - S4. MongoDB 엔티티, 리포지토리, 설정, 의존성을 제거한다.
 
 ### Spring: 아웃박스 릴레이
 
 - S5. 아웃박스 테이블을 둔다. 상태는 발행 대기, 발행됨, 완료, 실패다.
+  - 구현(PR 4): 테이블 `outbox`(엔티티 `Outbox`, `OutboxRepository`). 컬럼 `outbox_id` PK, `walking_course_id` UNIQUE, `payload` JSON(워커가 읽는 `{"courseId", "heartRates", "walkingTime"}` 그대로), `status` 값 `PENDING` / `PUBLISHED` / `COMPLETED` / `FAILED`, `created_at`, `updated_at`. 인덱스 `(status)`.
 - S6. 단건 잠금 발행 함수를 둔다. `SELECT ... FOR UPDATE SKIP LOCKED` 로 행을 잡고, 발행 후 브로커 확인 응답을 받으면 발행됨으로 표시한다.
 - S7. `publisher-confirm-type` 을 켜고 확인 응답 대기에 3초 상한을 둔다.
-- S8. 커밋 직후 이벤트 리스너에서 새 트랜잭션(`REQUIRES_NEW`)으로 즉시 발행한다.
-- S9. 스케줄러가 생성 후 10초가 지난 발행 대기 행을 수거해 같은 함수로 발행한다.
+  - 구현(PR 4): `correlated` + `CorrelationData` future 를 3초 대기. `mandatory` 와 `publisher-returns` 를 켜서 라우팅되지 않아 반송된 메시지도 실패로 본다. 연결, 핸드셰이크, 채널 RPC 도 3초 상한이고 heartbeat 는 5초다. 브로커 연결은 스케줄러가 트랜잭션을 열기 전에 맺어서, 한 번의 발행 시도가 행 잠금과 DB 커넥션을 쥐는 시간은 보통 약 3초다. 연결 확인 직후 연결이 끊기면 트랜잭션 안에서 재연결하느라 더 길어질 수 있고, 브로커를 일시 정지시킨 측정에서 최대 6.3초가 나왔다.
+- S8. 저장 요청은 발행하지 않는다. 커밋 직후 즉시 발행은 두지 않고 스케줄러만 발행한다(6장). 분석 시작이 보통 최대 약 10초 늦어지는 것을 단순함과 맞바꿨다. 같은 배치에 발행 실패나 다른 인스턴스와의 잠금 충돌이 있으면 그 주기가 끝나 더 늦어진다. 주기는 우선 10초로 두고 필요하면 줄인다.
+- S9. 스케줄러가 발행 대기 행을 수거해 S6 의 함수로 한 행씩 발행한다.
+  - 구현(PR 4): `OutboxRelayScheduler.relayPending`, 이전 실행 종료 후 10초 간격(`fixedDelay`), `ORDER BY outbox_id` 로 한 번에 100행. 가득 찬 배치를 모두 발행했으면 기다리지 않고 다음 배치를 읽는다. 실패나 잠금 충돌이 하나라도 있으면 다음 주기로 미룬다. 인스턴스가 여러 대여도 S6 의 행 잠금이 중복 발행을 막는다.
 - S10. 발행됨 행은 재발행하지 않는다. 30분이 지나도 완료되지 않으면 아웃박스와 코스를 실패로 표시한다.
 
 ### Spring: 결과 저장 API
@@ -91,6 +95,7 @@
 ### Spring: 조회 API
 
 - S18. 코스 목록과 상세 응답에 분석 상태를 포함한다.
+  - 구현(PR 4): 필드 `analysisStatus`, 값 `"ANALYZING"` / `"COMPLETED"` / `"FAILED"`.
 - S19. 상세 조회는 MySQL 의 좌표 테이블을 읽는다.
 
 ### FastAPI 워커
@@ -124,6 +129,7 @@
 ## 4. 전달 보장
 
 - 발행은 at-least-once 다. 릴레이가 확인 응답을 받고 발행됨 커밋 전에 죽으면 같은 메시지가 다시 나간다.
+- 확인 응답 시간 초과도 중복을 만든다. 브로커가 늦게라도 첫 메시지를 받으면, 발행 대기로 남은 행을 다음 주기에 다시 보낸 메시지와 함께 두 건이 전달된다.
 - 소비도 at-least-once 다. 워커가 ack 전에 죽으면 메시지가 큐로 돌아가 다시 전달된다.
 - 중복은 저장 API 의 멱등성(S13, S14)으로 흡수한다. 계산이 결정적이라 중복 결과의 내용은 같다.
 - ack 를 기다리는 메시지는 그 컨슈머 한 대만 점유한다. 다른 컨슈머는 다음 메시지를 받는다.
@@ -155,6 +161,7 @@
 | 서킷 브레이커 | Spring 이 FastAPI 를 동기 호출하지 않고, 워커 수가 Spring 호출 동시성의 상한이다 |
 | 발행됨 행 재발행 | 확인 응답을 받은 메시지는 큐에 남아 있다. 큐가 밀렸을 때 재발행하면 과부하를 키운다 |
 | 기존 데이터 이전 | 배포된 서비스가 아니다 |
+| 커밋 직후 즉시 발행 | AFTER_COMMIT 에서 REQUIRES_NEW 를 열면 요청 하나가 커넥션 두 개를 잡아 풀이 교착되므로 별도 스레드 풀이 필요했고, 스케줄러와 함께 릴레이 경로가 둘이 된다. 스케줄러 단일 경로의 비용은 분석 시작이 폴링 주기(현재 10초)만큼 늦어지는 것뿐이다 |
 
 ## 7. 미정
 
