@@ -26,6 +26,7 @@ public enum ResponseCode {
 	// 5000 - WALKING
 	FAIL_TO_WALKING_COURSE("5000", "[ERROR] 산책 코스 서비스에서 예상치 못한 오류가 발생했습니다."),
 	FAIL_TO_SAVE_WALKING_COURSE("5001", "[ERROR] 산책 코스 저장에 실패했습니다."),
+	WALKING_COURSE_NOT_FOUND("5002", "산책 코스가 존재하지 않습니다."),
 
 	// 6000 - Redis
 	REDIS_TOKEN_STORED_EXCEPTION("6000", "Redis에서 Token관련 작업 중 오류가 발생했습니다.");

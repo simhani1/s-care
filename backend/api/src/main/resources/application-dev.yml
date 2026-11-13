@@ -23,6 +23,11 @@ spring:
     username: ${DEV_MYSQL_USER}
     password: ${DEV_MYSQL_PASSWORD}
 
+  task:
+    scheduling:
+      pool:
+        size: 2
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -53,6 +58,10 @@ jwt:
     expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
   refresh:
     expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
+
+internal:
+  api:
+    secret: ${INTERNAL_API_SECRET}
 
 ## fast API 주소
 fast:

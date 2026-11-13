@@ -20,6 +20,11 @@ spring:
     template:
       mandatory: true
 
+  task:
+    scheduling:
+      pool:
+        size: 2
+
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -56,6 +61,10 @@ springdoc:
     path: ${SWAGGER_UI_PATH}  # Swagger UI에 접근할 URL 경로
   api-docs:
     path: ${SWAGGER_API_DOCS_PATH}
+
+internal:
+  api:
+    secret: ${INTERNAL_API_SECRET}
 
 ## fast API 주소
 fast:

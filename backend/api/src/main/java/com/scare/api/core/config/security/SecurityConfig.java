@@ -30,6 +30,9 @@ public class SecurityConfig {
 	private String swaggerPath;
 	private String fullSwaggerPath;
 
+	@Value("${internal.api.secret}")
+	private String internalApiSecret;
+
 	@Value("${springdoc.api-docs.path}")
 	private String apiDocsPath;
 	private String fullApiDocsPath;
@@ -51,6 +54,7 @@ public class SecurityConfig {
 		http.authorizeHttpRequests(auth -> auth
 			.requestMatchers("/api/v1/members/auth/login", "/api/v1/members/auth/reissue").permitAll()
 			.requestMatchers(fullSwaggerPath, fullApiDocsPath).permitAll()
+			.requestMatchers("/internal/**").access(new InternalSecretAuthorizationManager(internalApiSecret))
 			.requestMatchers("/api/v*/**").hasAuthority(MemberRole.ROLE_USER.name())
 			.requestMatchers("/error").permitAll()
 			.anyRequest().authenticated());

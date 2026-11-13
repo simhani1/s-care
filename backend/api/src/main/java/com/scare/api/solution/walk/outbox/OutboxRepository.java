@@ -19,9 +19,18 @@ public interface OutboxRepository extends JpaRepository<Outbox, Long> {
 	@Query("SELECT o.id FROM Outbox o WHERE o.status = :status ORDER BY o.id")
 	List<Long> findIdsByStatus(@Param("status") OutboxStatus status, Pageable pageable);
 
+	boolean existsByWalkingCourseId(Long walkingCourseId);
+
 	@Modifying
-	@Query("UPDATE Outbox o SET o.status = :status, o.updatedAt = :now WHERE o.walkingCourseId = :courseId")
-	int updateStatusByWalkingCourseId(@Param("courseId") Long courseId, @Param("status") OutboxStatus status,
-		@Param("now") LocalDateTime now);
+	@Query("UPDATE Outbox o SET o.status = com.scare.api.solution.walk.outbox.OutboxStatus.COMPLETED, "
+		+ "o.updatedAt = :now WHERE o.walkingCourseId = :courseId "
+		+ "AND o.status <> com.scare.api.solution.walk.outbox.OutboxStatus.COMPLETED")
+	int complete(@Param("courseId") Long courseId, @Param("now") LocalDateTime now);
+
+	@Modifying
+	@Query("UPDATE Outbox o SET o.status = com.scare.api.solution.walk.outbox.OutboxStatus.FAILED, "
+		+ "o.updatedAt = :now WHERE o.status IN (com.scare.api.solution.walk.outbox.OutboxStatus.PENDING, "
+		+ "com.scare.api.solution.walk.outbox.OutboxStatus.PUBLISHED) AND o.updatedAt < :threshold")
+	int failStale(@Param("threshold") LocalDateTime threshold, @Param("now") LocalDateTime now);
 
 }

@@ -35,7 +35,7 @@ case "${1:-}" in
     cd "$BACKEND/api"
     [ -f .env ] || cp .env.example .env
     sh gradlew build -x test -q
-    nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -Duser.timezone=Asia/Seoul -jar build/libs/api-0.0.1-SNAPSHOT.jar > "$RUN/spring.log" 2>&1 &
+    OUTBOX_SWEEP_INTERVAL=${OUTBOX_SWEEP_INTERVAL:-PT5S} nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -Duser.timezone=Asia/Seoul -jar build/libs/api-0.0.1-SNAPSHOT.jar > "$RUN/spring.log" 2>&1 &
     echo $! > "$RUN/spring.pid"
     cd "$BACKEND/fast-api"
     if [ ! -x .venv/bin/python ]; then
