@@ -15,7 +15,6 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// 좌표는 목록 조회가 읽지 않도록 walking_course 와 분리한다. PK 는 코스 ID 를 그대로 쓴다(1:1).
 @Table(name = "walking_detail")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -36,7 +35,6 @@ public class WalkingDetail {
 		this.locationData = locationData;
 	}
 
-	// 값 비교가 없으면 Hibernate 가 JSON 을 매번 변경된 것으로 보고 INSERT 뒤에 같은 값으로 UPDATE 한다
 	@EqualsAndHashCode
 	@Getter
 	@NoArgsConstructor(access = AccessLevel.PROTECTED)

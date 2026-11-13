@@ -9,6 +9,10 @@
 - 워커 (Python 3.12): `cd backend/fast-api && .venv/bin/uvicorn main:app --port 8000`
 - 자세한 내용은 `backend/README.md`.
 
+## 코드 작성
+
+- 주석은 핵심 로직에만 단다. 설정 값 설명, 변경 이유, 자명한 코드 설명은 쓰지 않는다. 배경은 PR 본문과 스펙에 적는다.
+
 ## Git
 
 - 이 저장소는 `S-Care/s-care` 의 포크다. PR 은 반드시 `--repo simhani1/s-care --base main` 으로 올린다. 생략하면 원본 저장소로 올라간다.
@@ -27,3 +31,4 @@
 | 2026-11-13 | 초기 구성 | 전체 | - |
 | 2026-11-13 | 워커 로그 버퍼링 해제 | skills/e2e-verify/scripts/stack.sh | PR 2 검증에서 워커 출력이 로그에 남지 않음 |
 | 2026-11-13 | PR 병합 단계 제거 | skills/walk-save-pr, CLAUDE.md | 사용자가 코드 리뷰 후 직접 병합 |
+| 2026-11-13 | 주석 최소화 규칙 추가 | CLAUDE.md | 핵심 로직이 아닌 주석 제거 요청 |
