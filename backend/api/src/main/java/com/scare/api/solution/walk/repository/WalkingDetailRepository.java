@@ -1,7 +1,8 @@
 package com.scare.api.solution.walk.repository;
 
-import com.scare.api.solution.walk.domain.WalkingDetail;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface WalkingDetailRepository extends MongoRepository<WalkingDetail, Long> {
+import com.scare.api.solution.walk.domain.WalkingDetail;
+
+public interface WalkingDetailRepository extends JpaRepository<WalkingDetail, Long> {
 }

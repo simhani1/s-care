@@ -64,16 +64,24 @@ def scenario_basic(n):
     course_id = body["data"]
     print(f"저장 {time.time() - started:.2f}s courseId={course_id}")
 
+    sent = walk_body(n)["locations"]
+    pos = {}
+
     def detail():
         status, body, _ = call("GET", f"/api/v1/walking/detail/{course_id}", token=token)
         assert status == 200, f"상세 조회 실패: {status} {body}"
         data = body["data"]
+        pos["list"] = data["posList"]
         data["posList"] = len(data["posList"])   # 실패 메시지에 좌표 전체가 찍히지 않게 개수만 남긴다
         return data
 
     data = wait_for(detail, lambda d: d["maxStress"] != 0)
     print(f"결과 반영 {time.time() - started:.2f}s {data}")
     assert data["posList"] == n, f"좌표 수 {data['posList']} != {n}"
+    for i in (0, n // 2, n - 1):   # 저장한 좌표가 순서와 값 그대로 돌아오는지
+        got, want = pos["list"][i], sent[i]
+        assert math.isclose(got["lat"], want["latitude"]) and math.isclose(got["lng"], want["longitude"]), \
+            f"좌표[{i}] {got} != {want}"
     assert data["minStress"] <= data["maxStress"]
     assert 0 <= data["startIdx"] <= data["endIdx"] < n, "힐링 구간 인덱스가 좌표 범위를 벗어났다"
 

@@ -31,12 +31,6 @@ spring:
       host: redis
       port: 6379
 
-    mongodb:
-      uri: ${DEV_MONGODB_URI}
-      database: ${DEV_MONGODB_DATABASE}
-      authentication-database: admin
-      auto-index-creation: true
-
 logging:
   level:
     org:

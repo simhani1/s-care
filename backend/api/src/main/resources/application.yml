@@ -28,12 +28,6 @@ spring:
       host: localhost
       port: 6379
 
-    mongodb:
-      uri: ${LOCAL_MONGODB_URI}
-      database: ${LOCAL_MONGODB_DATABASE}
-      authentication-database: admin
-      auto-index-creation: true
-
 logging:
   level:
     org:
