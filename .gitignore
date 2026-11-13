@@ -1,0 +1,5 @@
+
+# 하네스 중간 산출물과 로컬 실행 로그
+_workspace/
+_workspace_prev/
+backend/.run/

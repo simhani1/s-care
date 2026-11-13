@@ -9,3 +9,5 @@ pyhrv~=0.4.1
 pyerfa~=2.0.1.4
 uvicorn>=0.22.0
 aio-pika~=9.4.3
+# pyhrv 가 쓰는 biosppy 가 선언 없이 요구한다. 없으면 워커가 뜨지 않는다
+peakutils

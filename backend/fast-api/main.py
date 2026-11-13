@@ -1,4 +1,5 @@
 import json
+import os
 from contextlib import asynccontextmanager
 
 from aio_pika import connect_robust, IncomingMessage, Message
@@ -9,11 +10,14 @@ from models.response_models import StressOverview
 from services.calculate_service import *
 from services.stress_overview_service import *
 
+# 접속 정보는 코드에 두지 않는다. 기본값은 backend/docker-compose.yml 의 로컬 브로커
+RABBITMQ_URL = os.environ.get('RABBITMQ_URL', 'amqp://scare:scare@localhost:5672/')
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # RabbitMQ 연결 및 큐 선언
-    connection = await connect_robust('amqp://scare:scare1234@k11a408.p.ssafy.io:8006/')
+    connection = await connect_robust(RABBITMQ_URL)
     channel = await connection.channel()
 
     # 요청 및 응답 큐 설정

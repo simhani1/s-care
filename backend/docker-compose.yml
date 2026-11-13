@@ -1,0 +1,37 @@
+# 로컬 개발용 인프라. 애플리케이션(Spring, FastAPI)은 호스트에서 직접 실행한다.
+# 값은 전부 로컬 전용 기본값이며 api/.env.example 과 짝을 이룬다.
+name: scare
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: scare
+      MYSQL_USER: scare
+      MYSQL_PASSWORD: scare
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Seoul
+    ports: ["3306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uscare", "-pscare"]
+      interval: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: scare
+      RABBITMQ_DEFAULT_PASS: scare
+    ports: ["5672:5672", "15672:15672"]  # 15672: 관리 콘솔
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
