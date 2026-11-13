@@ -3,3 +3,4 @@
 _workspace/
 _workspace_prev/
 backend/.run/
+__pycache__/

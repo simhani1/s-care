@@ -65,6 +65,7 @@
 
 - S1. 코스, 좌표, 아웃박스 행을 하나의 MySQL 트랜잭션으로 저장한다.
 - S2. 좌표는 코스 테이블이 아닌 별도 MySQL 테이블의 JSON 컬럼에 저장한다. 목록 조회가 좌표를 읽지 않게 하기 위함이다.
+  - 구현(PR 3): 테이블 `walking_detail`, PK `walking_course_id`(코스 ID 를 그대로 쓰는 1:1, 자동 생성 아님), 좌표 `location_data` JSON NOT NULL. 원소는 `{"latitude", "longitude"}`. 엔티티 `WalkingDetail`, 리포지토리 `WalkingDetailRepository`(JpaRepository).
 - S3. 코스에 분석 상태 컬럼을 두고 저장 시 분석 중으로 기록한다.
 - S4. MongoDB 엔티티, 리포지토리, 설정, 의존성을 제거한다.
 

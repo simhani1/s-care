@@ -2,7 +2,7 @@
 
 ### 로컬 실행
 
-인프라(MySQL, RabbitMQ, Redis, MongoDB)는 docker-compose 로 띄우고, 애플리케이션은 호스트에서 직접 실행한다.
+인프라(MySQL, RabbitMQ, Redis)는 docker-compose 로 띄우고, 애플리케이션은 호스트에서 직접 실행한다.
 
 ```bash
 # 1. 인프라
