@@ -495,7 +495,9 @@ def scenario_sweep_race(n, published=30, seconds=20, savers=3):
         for t in threads:
             t.join()
     finally:
-        sql(f"UPDATE outbox SET status = 'FAILED' WHERE status = 'PENDING' AND walking_course_id > {max(ids)}")
+        sql(f"UPDATE outbox SET status = 'FAILED' WHERE status IN ('PENDING', 'PUBLISHED') AND walking_course_id > {max(ids)}")
+        sql("UPDATE walking_course SET analysis_status = 'FAILED' WHERE analysis_status = 'ANALYZING' "
+            f"AND walking_course_id > {max(ids)}")
         os.kill(pid("worker"), signal.SIGCONT)
     failed = [st for st in statuses if st != 200]
     print(f"실패 처리 중 저장 {len(statuses)}건, 200 아닌 것 {len(failed)}건")

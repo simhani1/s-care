@@ -135,7 +135,7 @@ public class WalkingCommandService {
 	 */
 	public void completeAnalysis(UpdateBestSectionDto dto) {
 		long locations = walkingDetailRepository.countLocations(dto.getCourseId()).orElse(0L);
-		if (locations > 0 && dto.getEndIdx() >= locations) {
+		if (dto.getEndIdx() >= Math.max(locations, 1)) {
 			throw new InvalidAnalysisResultException("endIdx " + dto.getEndIdx() + " >= locations " + locations);
 		}
 		if (outboxRepository.complete(dto.getCourseId(), LocalDateTime.now()) == 0) {
