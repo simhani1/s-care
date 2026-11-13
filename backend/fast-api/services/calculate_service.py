@@ -1,35 +1,6 @@
 import numpy as np
-import pyhrv.frequency_domain as fd
-import pyhrv.time_domain as td
 import scipy as sp
 from scipy.signal import welch
-
-
-def get_single_stress_pyhrv(hr_data: list[float]):
-    # NN 간격 계산
-    nn_intervals = 60000 / np.array(hr_data)
-
-    sdrr = get_sdrr(nn_intervals)
-
-    # RMSSD 계산
-    rmssd_result = td.rmssd(nn_intervals)
-    rmssd = rmssd_result['rmssd']
-
-    # 주파수 분석을 통한 LF/HF 비율 계산
-    freq_domain_features = fd.welch_psd(nni=nn_intervals, show=False)
-    lf_hf_ratio = freq_domain_features['fft_ratio']
-
-    # 스트레스 지수 계산
-    stress_index = lf_hf_ratio / rmssd if rmssd != 0 else None
-
-    # 가중치 계산
-    lf_hf_weight = get_lf_hf_weight(lf_hf_ratio)
-    sdrr_weight = get_sdrr_weight(sdrr)
-    rmssd_weight = get_rmssd_weight(rmssd)
-
-    # 스트레스 지수 계산
-    stress = lf_hf_weight + sdrr_weight + rmssd_weight
-    return stress
 
 
 def get_single_stress(hr_data: list[float]):
@@ -174,7 +145,7 @@ def welch_psd(nni=None,
 
     # NNI 시리즈의 총 기간에 따라 'nperseg'를 조정 (5분 임계값 = 300000ms)
     if t.max() < 300000:
-        nperseg = nfft
+        nperseg = min(nfft, nn_interpol.size)
     else:
         nperseg = 300
 
@@ -267,10 +238,13 @@ def _get_frequency_arrays(freq, vlf_i, lf_i, hf_i):
     return vlf_f, lf_f, hf_f
 
 
-def get_multiple_stress_index(hr_data: list[float]):
-    stress_arr = []
-    for i in range(4, len(hr_data) + 1):
-        partial_hr_data = hr_data[:i]
-        stress_index = get_single_stress(partial_hr_data)
-        stress_arr.append(stress_index)
-    return stress_arr
+def get_windowed_stress_index(hr_data: list[float], window_size: int):
+    """고정 길이 윈도우를 한 칸씩 밀며 스트레스 지수를 구한다.
+
+    stress_arr[j] 는 hr_data[j : j + window_size] 구간의 스트레스다.
+    샘플이 윈도우보다 적으면 전체를 한 구간으로 보고 값 하나만 돌려준다.
+    """
+    if len(hr_data) <= window_size:
+        return [get_single_stress(hr_data)]
+    return [get_single_stress(hr_data[j:j + window_size])
+            for j in range(len(hr_data) - window_size + 1)]
