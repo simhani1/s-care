@@ -28,10 +28,10 @@ description: "S-Care 백엔드를 로컬에서 실제로 띄워 종단 간으로
    | 시나리오 | 확인하는 것 |
    |---|---|
    | `basic` | 저장 직후 상태가 `ANALYZING` 또는 `COMPLETED`, 이후 상세와 목록의 `analysisStatus` 와 아웃박스가 `COMPLETED` |
-   | `outbox` | 워커를 `SIGSTOP` 으로 멈춘 채 저장해 아웃박스가 `PUBLISHED` 로 머물고, 스케줄러가 여러 번(3초) 돌아도 큐 메시지가 1개뿐인지 본다. 재개 후 `COMPLETED`. 약 5초 걸린다 |
+   | `outbox` | 워커를 `SIGSTOP` 으로 멈춘 채 저장해 아웃박스가 `PUBLISHED` 로 머물고, 스케줄러가 한 번 더 도는 12초 뒤에도 큐 메시지가 1개뿐인지 본다. 재개 후 `COMPLETED`. 약 25초 걸린다 |
    | `broker-outage` | `docker compose stop rabbitmq` 상태에서 저장이 2초 안에 200 이고 코스는 `ANALYZING`, 아웃박스는 `PENDING`. 브로커를 다시 켜면 스케줄러가 발행해 `COMPLETED` 가 된다. 실패해도 브로커는 다시 켠다 |
    | `concurrent` | 저장 30건을 동시에 보내 모두 200 이고 가장 느린 응답이 3초 미만인지, 30건 모두 `COMPLETED` 가 되는지 본다. 저장 경로가 브로커나 두 번째 DB 커넥션을 기다리는 회귀(풀 교착)를 잡는다 |
-   | `broker-hang` | `docker compose pause rabbitmq` 상태에서 저장 4건(사이에 8초 대기)이 각각 1초 안에 200 이고 `ANALYZING` 인지 본다. `unpause` 후 모두 `COMPLETED`. 실패해도 브로커는 다시 재개한다. 약 10초 걸린다 |
+   | `broker-hang` | `docker compose pause rabbitmq` 상태에서 저장 4건(사이에 12초 대기)이 각각 1초 안에 200 이고 `ANALYZING` 인지 본다. `unpause` 후 모두 `COMPLETED`. 실패해도 브로커는 다시 재개한다. 약 25초 걸린다 |
 
    전체를 한 번에: `for s in basic outbox broker-outage concurrent broker-hang; do python3 .claude/skills/e2e-verify/scripts/smoke.py $s 600 || break; done`. `outbox`, `broker-outage`, `broker-hang` 은 docker compose 와 `backend/.run/worker.pid` 를 직접 다룬다.
 

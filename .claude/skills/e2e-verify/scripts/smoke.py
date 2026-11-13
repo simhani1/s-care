@@ -142,9 +142,9 @@ def scenario_outbox(n):
     os.kill(worker, signal.SIGSTOP)
     try:
         course_id, _ = save(token, n)
-        wait_for(lambda: outbox_status(course_id), lambda s: s == "PUBLISHED", timeout=10)
+        wait_for(lambda: outbox_status(course_id), lambda s: s == "PUBLISHED", timeout=30)
         assert course_status(token, course_id) == "ANALYZING"
-        time.sleep(3)
+        time.sleep(12)
         assert outbox_status(course_id) == "PUBLISHED"
         depth = queue_depth()
         assert depth - base == 1, f"발행된 메시지 {depth - base}개"
@@ -217,7 +217,7 @@ def scenario_broker_hang(n):
             course_id, elapsed = save(token, n)
             assert elapsed < 1, f"저장이 {elapsed:.2f}s 걸렸다"
             course_ids.append(course_id)
-        time.sleep(8)
+        time.sleep(12)
         course_id, elapsed = save(token, n)
         assert elapsed < 1, f"스케줄러가 도는 중 저장이 {elapsed:.2f}s 걸렸다"
         course_ids.append(course_id)

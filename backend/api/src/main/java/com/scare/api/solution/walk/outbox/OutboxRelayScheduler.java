@@ -27,7 +27,7 @@ public class OutboxRelayScheduler {
 	 * 배치가 가득 찼고 전부 발행됐으면 쌓인 행이 더 있다고 보고 기다리지 않고 다음 배치로 간다.
 	 * 실패나 잠금 충돌이 하나라도 있으면 다음 주기로 미뤄, 계속 실패하는 행 위에서 쉬지 않고 도는 것을 막는다.
 	 */
-	@Scheduled(fixedDelay = 1000)
+	@Scheduled(fixedDelay = 10_000)
 	public void relayPending() {
 		while (relayBatch() == BATCH_SIZE) {
 		}
