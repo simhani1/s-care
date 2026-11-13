@@ -1,5 +1,3 @@
-# 로컬 개발용 인프라. 애플리케이션(Spring, FastAPI)은 호스트에서 직접 실행한다.
-# 값은 전부 로컬 전용 기본값이며 api/.env.example 과 짝을 이룬다.
 name: scare
 
 services:
@@ -22,7 +20,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: scare
       RABBITMQ_DEFAULT_PASS: scare
-    ports: ["5672:5672", "15672:15672"]  # 15672: 관리 콘솔
+    ports: ["5672:5672", "15672:15672"]
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s

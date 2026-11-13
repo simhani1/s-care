@@ -6,7 +6,6 @@ from services.calculate_service import get_windowed_stress_index
 
 # 스트레스 한 점을 계산할 때 보는 심박 샘플 수. 근거는 experiments/RESULTS.md
 WINDOW_SIZE = 120
-# 이보다 짧은 산책은 힐링 구간을 제공하지 않는다 (초)
 MIN_HEALING_WALK_SECONDS = 300
 SECTION_DIVISOR = 3
 
@@ -24,7 +23,6 @@ def find_healing_course_idx(stress_arr: list[float], section_len: int = None):
 
     prefix = np.concatenate(([0.0], np.cumsum(stress_arr, dtype=float)))
     section_avgs = (prefix[section_len:] - prefix[:-section_len]) / section_len
-    # 누적합의 부동소수 오차가 동률을 깨지 않게 반올림한 값으로 고른다
     start_idx = int(np.argmin(np.round(section_avgs, 9)))
     return float(section_avgs[start_idx]), start_idx, start_idx + section_len - 1
 
@@ -44,7 +42,7 @@ def build_stress_overview(hr_data: list[float], walking_time: int) -> StressOver
 
     start_idx, end_idx 는 hr_data(=위치 좌표) 기준 인덱스다.
     """
-    if len(hr_data) < 4:  # 3차 보간에 필요한 최소 샘플 수
+    if len(hr_data) < 4:
         raise CalculateFailedException()
     stress_arr = get_windowed_stress_index(hr_data, WINDOW_SIZE)
 
