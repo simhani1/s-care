@@ -67,15 +67,20 @@
 - S2. 좌표는 코스 테이블이 아닌 별도 MySQL 테이블의 JSON 컬럼에 저장한다. 목록 조회가 좌표를 읽지 않게 하기 위함이다.
   - 구현(PR 3): 테이블 `walking_detail`, PK `walking_course_id`(코스 ID 를 그대로 쓰는 1:1, 자동 생성 아님), 좌표 `location_data` JSON NOT NULL. 원소는 `{"latitude", "longitude"}`. 엔티티 `WalkingDetail`, 리포지토리 `WalkingDetailRepository`(JpaRepository).
 - S3. 코스에 분석 상태 컬럼을 두고 저장 시 분석 중으로 기록한다.
+  - 구현(PR 4): `walking_course.analysis_status` NOT NULL, 값 `ANALYZING` / `COMPLETED` / `FAILED`(enum `AnalysisStatus`).
 - S4. MongoDB 엔티티, 리포지토리, 설정, 의존성을 제거한다.
 
 ### Spring: 아웃박스 릴레이
 
 - S5. 아웃박스 테이블을 둔다. 상태는 발행 대기, 발행됨, 완료, 실패다.
+  - 구현(PR 4): 테이블 `outbox`(엔티티 `Outbox`, `OutboxRepository`). 컬럼 `outbox_id` PK, `walking_course_id` UNIQUE, `payload` JSON(워커가 읽는 `{"courseId", "heartRates", "walkingTime"}` 그대로), `status` 값 `PENDING` / `PUBLISHED` / `COMPLETED` / `FAILED`, `created_at`, `updated_at`. 인덱스 `(status, created_at)`.
 - S6. 단건 잠금 발행 함수를 둔다. `SELECT ... FOR UPDATE SKIP LOCKED` 로 행을 잡고, 발행 후 브로커 확인 응답을 받으면 발행됨으로 표시한다.
 - S7. `publisher-confirm-type` 을 켜고 확인 응답 대기에 3초 상한을 둔다.
+  - 구현(PR 4): `correlated` + `CorrelationData` future 를 3초 대기. `mandatory` 와 `publisher-returns` 를 켜서 라우팅되지 않아 반송된 메시지도 실패로 본다. 연결, 핸드셰이크, 채널 RPC 도 3초 상한이고 heartbeat 는 5초다. 브로커 연결은 트랜잭션을 열기 전에 맺어서, 한 번의 발행 시도가 행 잠금과 DB 커넥션을 쥐는 시간은 약 3초가 상한이다.
 - S8. 커밋 직후 이벤트 리스너에서 새 트랜잭션(`REQUIRES_NEW`)으로 즉시 발행한다.
+  - 구현(PR 4): 리스너는 아웃박스 ID 를 스레드 2개, 큐 100 의 실행기에 넘기기만 한다. 큐가 차면 버리고 스케줄러가 수거한다. 저장 요청은 브로커를 기다리지 않는다.
 - S9. 스케줄러가 생성 후 10초가 지난 발행 대기 행을 수거해 같은 함수로 발행한다.
+  - 구현(PR 4): `OutboxRelayTrigger.relayStale`, 이전 실행 종료 후 5초 간격(`fixedDelay`), 한 번에 100행. 기준 시각은 JVM 시계로 계산한다.
 - S10. 발행됨 행은 재발행하지 않는다. 30분이 지나도 완료되지 않으면 아웃박스와 코스를 실패로 표시한다.
 
 ### Spring: 결과 저장 API
@@ -91,6 +96,7 @@
 ### Spring: 조회 API
 
 - S18. 코스 목록과 상세 응답에 분석 상태를 포함한다.
+  - 구현(PR 4): 필드 `analysisStatus`, 값 `"ANALYZING"` / `"COMPLETED"` / `"FAILED"`.
 - S19. 상세 조회는 MySQL 의 좌표 테이블을 읽는다.
 
 ### FastAPI 워커
@@ -124,6 +130,7 @@
 ## 4. 전달 보장
 
 - 발행은 at-least-once 다. 릴레이가 확인 응답을 받고 발행됨 커밋 전에 죽으면 같은 메시지가 다시 나간다.
+- 확인 응답 시간 초과도 중복을 만든다. 브로커가 늦게라도 첫 메시지를 받으면, 발행 대기로 남은 행을 스케줄러가 다시 보낸 메시지와 함께 두 건이 전달된다.
 - 소비도 at-least-once 다. 워커가 ack 전에 죽으면 메시지가 큐로 돌아가 다시 전달된다.
 - 중복은 저장 API 의 멱등성(S13, S14)으로 흡수한다. 계산이 결정적이라 중복 결과의 내용은 같다.
 - ack 를 기다리는 메시지는 그 컨슈머 한 대만 점유한다. 다른 컨슈머는 다음 메시지를 받는다.

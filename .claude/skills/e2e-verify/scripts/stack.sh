@@ -9,7 +9,10 @@ mkdir -p "$RUN"
 stop() {
   for name in spring worker; do
     if [ -f "$RUN/$name.pid" ]; then
-      kill "$(cat "$RUN/$name.pid")" 2>/dev/null || true
+      pid=$(cat "$RUN/$name.pid")
+      kill "$pid" 2>/dev/null || true
+      i=0
+      while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 60 ]; do i=$((i + 1)); sleep 1; done
       rm -f "$RUN/$name.pid"
     fi
   done

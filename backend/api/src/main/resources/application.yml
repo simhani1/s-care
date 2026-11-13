@@ -12,6 +12,13 @@ spring:
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_USER}
     password: ${RABBITMQ_PWD}
+    connection-timeout: 3s
+    channel-rpc-timeout: 3s
+    requested-heartbeat: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
 
   jpa:
     hibernate:
