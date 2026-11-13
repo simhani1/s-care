@@ -16,9 +16,8 @@ public interface OutboxRepository extends JpaRepository<Outbox, Long> {
 		nativeQuery = true)
 	Optional<Outbox> lockPending(@Param("id") Long id);
 
-	@Query("SELECT o.id FROM Outbox o WHERE o.status = :status AND o.createdAt < :before ORDER BY o.id")
-	List<Long> findIdsByStatusCreatedBefore(@Param("status") OutboxStatus status,
-		@Param("before") LocalDateTime before, Pageable pageable);
+	@Query("SELECT o.id FROM Outbox o WHERE o.status = :status ORDER BY o.id")
+	List<Long> findIdsByStatus(@Param("status") OutboxStatus status, Pageable pageable);
 
 	@Modifying
 	@Query("UPDATE Outbox o SET o.status = :status, o.updatedAt = :now WHERE o.walkingCourseId = :courseId")

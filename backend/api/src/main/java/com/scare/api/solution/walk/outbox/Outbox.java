@@ -18,7 +18,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@Table(name = "outbox", indexes = @Index(name = "idx_outbox_status_created_at", columnList = "status, created_at"))
+@Table(name = "outbox", indexes = @Index(name = "idx_outbox_status", columnList = "status"))
 @Getter
 @DynamicUpdate
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

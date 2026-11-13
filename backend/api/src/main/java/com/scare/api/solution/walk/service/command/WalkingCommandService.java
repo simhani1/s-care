@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +20,6 @@ import com.scare.api.solution.walk.exception.NoWalkingCourseException;
 import com.scare.api.solution.walk.exception.WalkingCourseDataSaveException;
 import com.scare.api.solution.walk.outbox.Outbox;
 import com.scare.api.solution.walk.outbox.OutboxRepository;
-import com.scare.api.solution.walk.outbox.OutboxSavedEvent;
 import com.scare.api.solution.walk.outbox.OutboxStatus;
 import com.scare.api.solution.walk.repository.WalkingCourseRepository;
 import com.scare.api.solution.walk.repository.WalkingDetailRepository;
@@ -43,7 +41,6 @@ public class WalkingCommandService {
 	private final WalkingDetailRepository walkingDetailRepository;
 	private final OutboxRepository outboxRepository;
 	private final ObjectMapper objectMapper;
-	private final ApplicationEventPublisher eventPublisher;
 
 	public Long saveWalkingCourse(Long memberId, SaveWalkingCourseDto dto) {
 		log.info("[WalkingCommandService] 산책 코스 저장 시작, 산책 시간");
@@ -59,11 +56,10 @@ public class WalkingCommandService {
 		walkingLocations = walkingLocations.subList(0, minSize);
 		List<WalkingDetail.LocationPoint> locationPoints = processLocationData(walkingLocations);
 		Long courseId = saveWithoutStressData(dto, member, locationPoints);
-		Outbox outbox = outboxRepository.save(Outbox.builder()
+		outboxRepository.save(Outbox.builder()
 			.walkingCourseId(courseId)
 			.payload(analysisRequestPayload(courseId, walkingTime, heartRates))
 			.build());
-		eventPublisher.publishEvent(new OutboxSavedEvent(outbox.getId()));
 		return courseId;
 	}
 

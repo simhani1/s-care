@@ -35,3 +35,4 @@
 | 2026-11-13 | 아웃박스 시나리오(outbox, broker-outage) 추가, basic 이 분석 상태로 완료 판정 | skills/e2e-verify | PR 4 아웃박스와 릴레이 |
 | 2026-11-13 | stop 이 프로세스 종료를 기다림 | skills/e2e-verify/scripts/stack.sh | 종료 중인 Spring 의 create-drop 이 새로 띄운 스택의 테이블을 지움 |
 | 2026-11-13 | concurrent, broker-hang 시나리오 추가 | skills/e2e-verify | PR 4 검증에서 풀 교착과 브로커 무응답 블록이 기존 시나리오에 잡히지 않음 |
+| 2026-11-14 | outbox, broker-hang 시나리오 대기 단축 | skills/e2e-verify | 릴레이를 1초 주기 스케줄러 단일 경로로 전환 |
