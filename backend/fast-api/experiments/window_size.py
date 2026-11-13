@@ -20,7 +20,7 @@ import numpy as np
 
 from experiments.synthetic import make_walk
 from services.calculate_service import get_single_stress, get_windowed_stress_index
-from services.stress_overview_service import find_healing_course_idx
+from services.stress_overview_service import find_healing_course_idx, locate_healing_section
 
 warnings.filterwarnings("ignore")
 
@@ -42,9 +42,8 @@ def overlap(found, truth):
 def locate(hr, window):
     """윈도우 방식으로 회복 구간을 찾아 샘플 인덱스 [start, end) 로 돌려준다."""
     stress = get_windowed_stress_index(hr, window)
-    _, s, e = find_healing_course_idx(stress)
-    shift = min(window, len(hr)) // 2          # stress[j] 는 윈도우 중심 샘플을 대표한다
-    return s + shift, e + shift + 1
+    _, s, e = locate_healing_section(stress, min(window, len(hr)))
+    return s, e + 1
 
 
 def locate_prefix(hr):

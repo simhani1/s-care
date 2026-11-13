@@ -27,6 +27,17 @@ def test_healing_section_matches_brute_force():
         assert abs(avg - sum(arr[start:end + 1]) / (end - start + 1)) < 1e-9, name
 
 
+def test_ties_pick_earliest_section_even_with_float_rounding():
+    assert find_healing_course_idx([0.1, 0.2, 0.3] * 10)[1] == 0
+
+
+def test_sparse_samples_do_not_yield_tiny_healing_section():
+    """5분을 걸었어도 심박이 드물게 들어와 샘플이 적으면 힐링 구간을 내지 않는다."""
+    hr = make_walk(WINDOW_SIZE + 5, None, np.random.default_rng(6))
+    overview = build_stress_overview(hr, walking_time=600)
+    assert (overview.start_idx, overview.end_idx, overview.healing_stress_avg) == (0, 0, 0.0)
+
+
 def test_window_reads_only_its_own_samples():
     hr = make_walk(400, None, np.random.default_rng(1))
     stress = get_windowed_stress_index(hr, 60)
