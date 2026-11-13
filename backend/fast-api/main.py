@@ -5,10 +5,7 @@ from contextlib import asynccontextmanager
 from aio_pika import connect_robust, IncomingMessage, Message
 from fastapi import FastAPI
 
-from exceptions.custom_exceptions import CalculateFailedException
-from models.response_models import StressOverview
-from services.calculate_service import *
-from services.stress_overview_service import *
+from services.stress_overview_service import build_stress_overview
 
 # 접속 정보는 코드에 두지 않는다. 기본값은 backend/docker-compose.yml 의 로컬 브로커
 RABBITMQ_URL = os.environ.get('RABBITMQ_URL', 'amqp://scare:scare@localhost:5672/')
@@ -34,7 +31,7 @@ async def lifespan(app: FastAPI):
             walking_time = data.get('walkingTime')
 
             # 계산 수행
-            result = calc_multiple_stress_index(heart_rates, walking_time)
+            result = build_stress_overview(heart_rates, walking_time)
 
             response = {
                 'courseId': course_id,
@@ -62,23 +59,6 @@ async def lifespan(app: FastAPI):
     # 애플리케이션 종료 시 연결 정리
     await connection.close()
     print("Connection to RabbitMQ closed.")
-
-
-def calc_multiple_stress_index(hr_data: list[float], walking_time: int):
-    stress_arr = get_multiple_stress_index(hr_data)
-    if stress_arr is None:
-        raise CalculateFailedException()
-    healing_stress_avg, start_idx, end_idx = find_healing_course_idx(
-        stress_arr) if walking_time >= 300 else (0.0, 0, 0)
-    response = StressOverview(
-        max_stress=max(stress_arr),
-        min_stress=min(stress_arr),
-        stress_indices=stress_arr,
-        healing_stress_avg=healing_stress_avg,
-        start_idx=start_idx,
-        end_idx=end_idx
-    )
-    return response
 
 
 app = FastAPI(lifespan=lifespan)

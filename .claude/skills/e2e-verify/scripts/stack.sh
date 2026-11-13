@@ -42,7 +42,8 @@ case "${1:-}" in
       else "$(command -v python3.12 || command -v python3)" -m venv .venv; fi
     fi
     .venv/bin/pip install -q -r requirements.txt
-    nohup .venv/bin/uvicorn main:app --port 8000 > "$RUN/worker.log" 2>&1 &
+    # 워커의 print 출력이 버퍼에 갇히지 않게 한다
+    PYTHONUNBUFFERED=1 nohup .venv/bin/uvicorn main:app --port 8000 > "$RUN/worker.log" 2>&1 &
     echo $! > "$RUN/worker.pid"
     wait_http http://localhost:8080/api-docs spring
     wait_http http://localhost:8000/docs worker
