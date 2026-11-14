@@ -23,5 +23,6 @@ data class CourseResponseDTO(
     val endIdx: Int,
     val maxStress: Double,
     val minStress: Double,
-    val distance: Double
+    val distance: Double,
+    val analysisStatus: String? = null
 )
