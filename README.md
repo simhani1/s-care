@@ -5,39 +5,46 @@
     <img src='https://github.com/user-attachments/assets/1669732b-f465-4727-b02a-d9bb2174f361' />
 </div>
 
-## ✨ 주제
+스마트 워치를 이용한 실시간 스트레스 모니터링 서비스
 
--   일상 속 스트레스 관리를 함께 해주는 서비스
+- **기간**: 2024.10 ~ 2024.11
+- **팀**: 6인
+- **수상**: 프로젝트 결선 발표회 입상 (141개 팀 중 상위 8팀)
 
-## 📅 기간
+워치로 측정한 심박수로 스트레스 지수를 계산해 보여주고, 스트레스가 높아지면 날씨에 맞춰 산책이나 지압을 제안합니다. 산책을 마치면 경로와 함께 스트레스가 가장 낮았던 구간을 지도에 표시합니다.
 
--   2024.10.21 ~ 2024.11.19
+## 핵심 구현
 
-## 📜 주요 기능
+### 심박 데이터 기반 스트레스 지수 계산
 
-### 스트레스 시각화 및 알림
+Samsung Health SDK 가 스트레스 지수를 제공하지 않아, 실시간 심박수를 스트레스 지수로 변환하는 알고리즘을 구현했습니다.
 
-- 나를 투영한 펫이 스트레스 수치에 맞춰서 표정 변화
+- 심박수로 추정한 박동 간격에서 SDRR, RMSSD, LF/HF 지표를 계산합니다. 계산 방식은 pyHRV 를 참고했습니다.
+- 지표별 가중치를 적용해 스트레스 지수를 산출합니다.
 
-### 산책 유도 & 지압 유도 알림
+코드: [calculate_service.py](backend/fast-api/services/calculate_service.py)
 
-- 스트레스가 **나쁨** 구간에 해당되면 기상청 API를 호출하여 날씨 정보를 조회
-- 온도, 습도, 눈/비, 풍속의 상황에 맞춰서 산책 or 지압 중 하나를 사용자에게 제안하는 알림 전송
+### 슬라이딩 윈도우와 누적합으로 힐링 구간 탐색
 
-### 개인별 통계
+- 슬라이딩 윈도우 크기별로 테스트해 결과를 비교하고, 노이즈와 구간 탐지율을 고려해 윈도우 크기를 정했습니다.
+- 스트레스 지수가 가장 낮은 산책 구간을 찾기 위해 누적합으로 연속 구간별 평균을 계산하고 O(N) 에 탐색합니다.
+- 수정보다 경로 전체를 조회하는 일이 많은 특성을 고려해, 산책 경로 좌표를 배열로 묶어 MySQL JSON 컬럼에 저장합니다.
 
-- 일주일 동안 S-Care의 솔루션을 사용했던 통계 결과를 조회하여 한눈에 파악
+코드: [stress_overview_service.py](backend/fast-api/services/stress_overview_service.py) · 실험: [experiments/RESULTS.md](backend/fast-api/experiments/RESULTS.md)
 
-### 산책하기
+### 메시지 큐 기반 비동기 분석과 장애 복구
 
-- 실시간 위치로 산책 경로를 지도에 표시
-- 산책을 3분 이상으로 할 경우, 코스 기록 저장 가능
-- 산책을 5분 이상으로 할 경우, 산책 중 제일 스트레스가 낮았던 구간 기록 가능
-- 스트레스 분석은 저장 후 비동기로 진행되며, 분석이 끝나기 전에는 결과 화면에 대기 문구 표시
+- 산책 중 스트레스 변화 계산이 지연되어 발생한 API 타임아웃을 RabbitMQ 기반 비동기 처리로 해결했습니다.
+- 산책 저장과 분석 요청 기록을 하나의 트랜잭션으로 묶는 Transactional Outbox 를 적용하고, 스케줄러가 브로커로 발행합니다.
+- At-least-once 전달에 따른 중복 요청에 대비해, 컨슈머가 호출하는 결과 저장 API 를 조건부 UPDATE 로 멱등하게 구현했습니다.
+- 컨슈머는 결과 저장에 성공한 뒤에만 메시지를 ACK 하고, 실패하면 재시도 후 데드레터 큐로 보냅니다.
+- 동시 요청과 컨슈머 장애 시나리오를 샘플 데이터로 테스트해 분석 결과가 유실되지 않음을 확인했습니다.
 
-## 💻 개발 환경 및 문서
+설계 문서: [docs/spec/walk-save-improvement.md](docs/spec/walk-save-improvement.md)
 
-### 1️⃣ Stacks
+## 개발 환경
+
+### Stacks
 
 #### 🛠 Front-End 🛠
 
@@ -71,19 +78,19 @@
 [![Notion](https://img.shields.io/badge/Notion-000000?style=for-the-badge&logo=notion&logoColor=white)](https://imminent-hamburger-1d8.notion.site/8-0-4-0fbd317ef9d840bc9d31ea8adfa50ceb)
 [![Figma](https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white)](https://www.figma.com/design/7WUqXjKvUcDPLKYMUa9P4Y/%EC%98%B7%EC%A7%B1?node-id=0-1&t=K68NqokoRcvm5jnd-0)
 
-### 2️⃣ Architecture
+### Architecture
 
 <div align='center'>
   <img src='docs/images/architecture.png' width='800px' >
 </div>
 
-### 3️⃣ ERD
+### ERD
 
 <div align='center'>
   <img src='https://github.com/user-attachments/assets/3315086c-b253-48c6-beec-0a4c7a5216db' width='600px' >
 </div>
 
-### 4️⃣ 로컬 실행
+### 로컬 실행
 
 MySQL, RabbitMQ, Redis 는 docker compose 로 띄우고 Spring API 와 스트레스 계산 워커는 호스트에서 실행합니다. 자세한 방법은 [backend/README.md](backend/README.md) 에 있습니다.
 
@@ -93,26 +100,3 @@ cd api && cp .env.example .env && sh gradlew bootRun
 cd ../fast-api && python -m venv .venv && .venv/bin/pip install -r requirements.txt
 env $(cat .env.example | xargs) .venv/bin/uvicorn main:app --port 8000
 ```
-
-## 🔧 산책 저장 흐름 고도화 (2026)
-
-프로젝트 종료 후 이 포크에서 산책 저장과 스트레스 분석 흐름을 다시 설계했습니다. 요구사항과 결정 과정은 [docs/spec/walk-save-improvement.md](docs/spec/walk-save-improvement.md) 에 있습니다.
-
-### 주요 작업
-
-- **비동기 분석**: 산책은 분석 중 상태로 먼저 저장하고, 스트레스 분석은 RabbitMQ 를 거쳐 워커가 처리합니다.
-- **Transactional Outbox**: 산책 코스, 좌표, 분석 요청 기록을 하나의 DB 트랜잭션으로 저장합니다. 10초 주기 스케줄러가 발행 대기 행을 읽어 발행하고, 브로커의 확인 응답을 받은 뒤에만 발행됨으로 표시합니다.
-- **결과 저장 후 ACK**: 워커는 Spring Boot 의 결과 저장 API 에서 200 을 받은 뒤에만 메시지를 ACK 합니다. 실패하면 1초, 2초, 4초 간격으로 재시도한 뒤 데드레터 큐로 보냅니다.
-- **멱등한 결과 저장**: 같은 메시지가 다시 전달되어도 조건부 UPDATE 로 한 번만 반영합니다.
-- **워커 전용 API 보호**: 결과 저장 API 는 공유 비밀 헤더로 호출자를 확인하고, 결과 값과 좌표 인덱스의 범위를 검증합니다.
-- **분석 방식 교체**: 누적 계산을 120 샘플 고정 윈도우로 바꾸고, 평균 스트레스가 가장 낮은 구간을 누적합으로 찾습니다.
-- **저장소 통합**: 경로 좌표를 MongoDB 에서 MySQL JSON 컬럼으로 옮겨 산책과 한 트랜잭션으로 저장합니다.
-- **분석 상태 표시**: 산책 조회 응답에 분석 상태를 포함하고, 앱은 분석이 끝나기 전에 대기 문구를 보여줍니다.
-
-### 문서
-
-| 문서 | 내용 |
-| --- | --- |
-| [docs/spec/walk-save-improvement.md](docs/spec/walk-save-improvement.md) | 요구사항, 목표 구조, 채택하지 않은 것과 이유 |
-| [backend/fast-api/experiments/RESULTS.md](backend/fast-api/experiments/RESULTS.md) | 윈도우 크기 실험 |
-| [backend/README.md](backend/README.md) | 로컬 실행 방법 |
