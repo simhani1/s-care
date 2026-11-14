@@ -57,7 +57,18 @@ fun CourseDetailInfo(
                     text = "내 스트레스",
                     color = MaterialTheme.colorScheme.background
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val pendingMessage = when (course.analysisStatus) {
+                    "ANALYZING" -> "조금만 기다려주세요!"
+                    "FAILED" -> "분석하지 못했어요"
+                    else -> null
+                }
+                if (pendingMessage != null) {
+                    Text(
+                        text = pendingMessage,
+                        color = MaterialTheme.colorScheme.background,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = (course.maxStress - course.minStress).toInt().toString(),
                         color = MaterialTheme.colorScheme.background,
