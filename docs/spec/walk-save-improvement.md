@@ -55,7 +55,8 @@
                               FastAPI 가 큐에 ack
 ```
 
-- Spring 은 프로듀서, FastAPI 는 컨슈머 역할만 한다. 응답 큐와 Spring 리스너는 없다.
+- Spring 은 프로듀서, FastAPI 는 컨슈머 역할만 한다. 응답 큐와 Spring 리스너는 없다(PR 5 에서 제거).
+- 발행 후 1시간 안에 완료되지 않은 분석은 실패 처리 스케줄러가 아웃박스와 코스를 실패로 표시한다(S10).
 - RabbitMQ 를 유지한다. 저장소는 MySQL 하나다.
 - 이중화는 되어 있지 않지만 스케일 아웃이 가능한 구조로 설계한다.
 
@@ -80,16 +81,27 @@
 - S8. 저장 요청은 발행하지 않는다. 커밋 직후 즉시 발행은 두지 않고 스케줄러만 발행한다(6장). 분석 시작이 보통 최대 약 10초 늦어지는 것을 단순함과 맞바꿨다. 같은 배치에 발행 실패나 다른 인스턴스와의 잠금 충돌이 있으면 그 주기가 끝나 더 늦어진다. 주기는 우선 10초로 두고 필요하면 줄인다.
 - S9. 스케줄러가 발행 대기 행을 수거해 S6 의 함수로 한 행씩 발행한다.
   - 구현(PR 4): `OutboxRelayScheduler.relayPending`, 이전 실행 종료 후 10초 간격(`fixedDelay`), `ORDER BY outbox_id` 로 한 번에 100행. 가득 찬 배치를 모두 발행했으면 기다리지 않고 다음 배치를 읽는다. 실패나 잠금 충돌이 하나라도 있으면 다음 주기로 미룬다. 인스턴스가 여러 대여도 S6 의 행 잠금이 중복 발행을 막는다.
-- S10. 발행됨 행은 재발행하지 않는다. 30분이 지나도 완료되지 않으면 아웃박스와 코스를 실패로 표시한다.
+- S10. 발행됨 행은 재발행하지 않는다. 1시간 주기 스케줄러가 발행된 지 1시간이 지나도 완료되지 않은 행을 아웃박스와 코스 모두 실패로 표시한다. 행은 지우지 않고 상태만 바꾼다. 발행 대기 행은 대상이 아니다. 브로커 장애가 길어져도 복구 후 릴레이가 발행한다.
+  - 구현(PR 5): `OutboxFailureSweeper.failStale`, `fixedDelayString = ${outbox.sweep.interval:PT1H}`, 기준 1시간 고정. 발행 시각은 별도 컬럼 없이 `updated_at` 을 쓴다. PUBLISHED 행을 바꾸는 것은 발행(감사 기능이 `updated_at` 갱신), 완료, 실패 처리뿐이라 PUBLISHED 행의 `updated_at` 이 곧 발행 시각이다.
+  - 잠금: 후보는 잠그지 않는 일반 SELECT(`status = 'PUBLISHED' AND updated_at < ? ORDER BY outbox_id LIMIT 100`)로 고르고, 행마다 짧은 트랜잭션에서 `UPDATE outbox ... WHERE outbox_id = ? AND status = 'PUBLISHED' AND updated_at < ?` 가 1행이면 `UPDATE walking_course ... WHERE walking_course_id = ? AND analysis_status = 'ANALYZING'` 을 실행한다. 둘 다 PK 한 행만 잠가 저장의 INSERT, 릴레이, 결과 저장과 범위 잠금으로 얽히지 않는다. 잠금 뒤 조건을 다시 평가하므로 그 사이 완료된 행은 실패가 되지 않는다. 배치가 가득 차면 다음 배치를 읽는다.
+  - 릴레이와 실패 처리가 서로 막지 않도록 `spring.task.scheduling.pool.size: 2`. 브로커가 응답하지 않으면 릴레이가 한 스레드를 수 분 쥘 수 있다.
+  - 로컬 하네스(`stack.sh`)는 `OUTBOX_SWEEP_INTERVAL=PT5S` 로 띄운다. 기준 시간은 바꾸지 않고 `updated_at` 을 과거로 옮겨 검증한다.
+  - 알려진 한계(head-of-line): 릴레이는 `ORDER BY outbox_id` 하위 100행만 읽으므로, 영구히 발행에 실패하는 발행 대기 행이 100개 넘게 쌓이면 그 뒤의 행은 발행되지 않는다. 이번 범위에서는 다루지 않는다.
 
 ### Spring: 결과 저장 API
 
 - S11. PUT 방식의 내부 저장 API 를 둔다. 경로에 코스 ID 를 쓴다.
+  - 구현(PR 5): `PUT /internal/v1/walking/{course-id}/analysis-result`(`InternalWalkingController`). 본문 `{"maxStress", "minStress", "healingStressAvg", "startIdx", "endIdx"}`, 다섯 필드 모두 필수. 모르는 필드는 무시한다(워커가 필드를 먼저 추가해도 거부하지 않도록).
+  - 검증(어기면 400, 아무것도 저장하지 않음): 세 값이 모두 유한하고 0 이상 60 이하(가중치 세 개가 각각 0 ~ 20), `minStress <= maxStress`, `0 <= startIdx <= endIdx`, 코스에 좌표가 있으면 `endIdx < 좌표 수`. 힐링 구간 없음(`0, 0, 0.0`)은 좌표가 없는 코스에서도 유효하다. `"NaN"` 같은 문자열도 400 이다. 스트레스 값은 소수 그대로 받는다(`Double`).
+  - 응답: 200 반영 또는 이미 완료, 400 본문 누락, 형식 오류, 검증 실패, 403 비밀 불일치, 404 코스(아웃박스 행) 없음, 5xx 그 밖의 오류.
 - S12. 한 트랜잭션에서 아웃박스를 완료로 바꾸고 코스에 스트레스와 힐링 구간 정보를 기록하며 분석 상태를 완료로 바꾼다.
 - S13. 이미 완료 상태면 아무것도 하지 않고 200 을 반환한다. 오류를 주면 워커가 ack 하지 못한다.
 - S14. 조건부 UPDATE 로 동시 중복 호출을 막는다.
-- S15. 발행 대기 상태에서 결과가 먼저 도착해도 받아들인다.
+  - 구현(PR 5): `UPDATE outbox SET status = COMPLETED WHERE walking_course_id = ? AND status <> COMPLETED`. 1행이면 코스를 갱신하고, 0행이면 아웃박스 행이 있을 때 200(무시), 없을 때 404.
+- S15. 발행 대기 상태에서 결과가 먼저 도착해도 받아들인다. 완료된 행은 릴레이가 읽지 않으므로(PENDING 만 읽음) 다시 발행되지 않는다.
+  - 실패(S10) 뒤 늦게 도착한 결과도 받아들여 아웃박스와 코스를 완료로 바꾼다. 실제 결과가 실패 표시보다 낫다.
 - S16. 공유 비밀 헤더로 호출자를 검증한다. 일치하지 않으면 거부한다.
+  - 구현(PR 5): 헤더 `X-Internal-Secret`, 값은 `internal.api.secret`(`INTERNAL_API_SECRET`). `/internal/**` 는 사용자 JWT 권한과 무관하게 이 헤더로만 허용되고(`InternalSecretAuthorizationManager`, `MessageDigest.isEqual`), 사용자 JWT 만으로는 403 이다. 빈 비밀로는 기동하지 않는다.
 - S17. 응답 큐, RabbitMQ 리스너, 응답 메시지 DTO 를 제거한다.
 
 ### Spring: 조회 API
@@ -109,15 +121,24 @@
 - F4. 힐링 구간 탐색을 올바른 최소 평균 구간 탐색으로 고친다.
 - F5. 쓰지 않는 pyhrv 함수와 의존성을 삭제한다.
 - F6. prefetch 를 1 로 설정한다.
+  - 계산은 `asyncio.to_thread` 로 이벤트 루프 밖에서 돌려 AMQP heartbeat(워커 연결은 60초로 협상)를 막지 않는다.
 - F7. 계산 후 공유 비밀 헤더를 붙여 Spring 저장 API 를 호출한다.
+  - 구현(PR 5): 표준 라이브러리 `urllib`, 시간 초과 5초. 주소와 비밀은 필수 환경변수 `SPRING_BASE_URL`, `INTERNAL_API_SECRET` 이고 코드에 기본값이 없다. 없으면 기동하지 않는다. 로컬 값은 `backend/fast-api/.env.example` 에 있고 `stack.sh` 가 넣어준다.
 - F8. 200 응답을 받은 뒤에 큐에 ack 한다.
 - F9. 호출 실패 시 지수 백오프로 세 번 재시도한 뒤 데드레터 큐로 보낸다.
+  - 구현(PR 5): 재시도 대상은 연결 실패, 시간 초과, 5xx, 408, 429. 1초, 2초, 4초 뒤 다시 호출하고(총 4회) 그래도 실패하면 `reject(requeue=False)`.
+  - 401, 403 은 메시지가 아니라 비밀 설정 문제다. 데드레터로 보내지 않고 `reject(requeue=True)` 로 큐에 돌려놓은 뒤 ERROR 로그를 남기고 프로세스를 종료(종료 코드 1)한다. 큐가 소리 없이 데드레터 큐로 빠지는 대신 멈춘 워커가 드러난다. 다시 띄우는 것은 배포 환경의 감독자 몫이고 이 범위 밖이다. 감독자가 곧바로 재시작하면 메시지마다 한 번씩 403 을 받고 다시 죽으므로 재시작 간격(백오프)을 두어야 한다.
+  - 그 밖의 4xx(400, 404)는 다시 해도 같으므로 재시도 없이 데드레터로 보낸다.
+  - 계산 실패(샘플 4개 미만, 0 bpm, 필드 누락, NaN 결과)도 영구 오류라 계산을 다시 하지 않고 데드레터로 보낸다.
 - F10. 응답 큐 발행 코드를 제거한다.
 
 ### RabbitMQ
 
 - R1. 요청 큐에 데드레터 큐를 연결한다.
-- R2. 큐 길이에 상한을 두지 않는다. 상한을 넘은 메시지가 버려지면 유실이기 때문이다.
+  - 구현(PR 5): classic durable 큐 `request_queue`, 인수 `x-dead-letter-exchange: ""`(기본 익스체인지), `x-dead-letter-routing-key: request_queue.dlq`. 데드레터 큐 `request_queue.dlq` 는 인수 없는 durable 큐. Spring(`RabbitMqConfig`)과 워커가 둘 다 같은 인수로 두 큐를 선언한다. 재시도는 워커 안에서 하므로 quorum 큐의 `x-delivery-limit` 은 쓰지 않는다.
+  - 데드레터 큐는 소비하지 않는다. 그 코스는 S10 이 1시간 뒤 실패로 표시한다. 메시지는 릴레이가 persistent(delivery_mode 2)로 발행한다.
+  - 배포 메모(PR 5): 큐 인수는 재선언으로 바뀌지 않아(PRECONDITION_FAILED) 기존 브로커는 배포 전에 빈 `request_queue` 와 `response_queue` 를 삭제해야 한다(`rabbitmqctl delete_queue`, 안의 메시지도 함께 지워지므로 비어 있을 때). 새 필수 환경변수는 Spring 의 `INTERNAL_API_SECRET`, 워커의 `INTERNAL_API_SECRET`(Spring 과 같은 값), `SPRING_BASE_URL` 이다. 어느 쪽이든 없으면 기동하지 않는다. 기존 `backend/api/.env` 에는 `.env.example` 의 새 키를 직접 옮긴다. 로컬은 `stack.sh down` 이 볼륨을 지우므로 다시 띄우면 된다.
+- R2. 큐 길이에 상한을 두지 않는다. 상한을 넘은 메시지가 버려지면 유실이기 때문이다. `x-max-length` 를 두지 않는다.
 
 ### 안드로이드
 
@@ -132,6 +153,8 @@
 - 확인 응답 시간 초과도 중복을 만든다. 브로커가 늦게라도 첫 메시지를 받으면, 발행 대기로 남은 행을 다음 주기에 다시 보낸 메시지와 함께 두 건이 전달된다.
 - 소비도 at-least-once 다. 워커가 ack 전에 죽으면 메시지가 큐로 돌아가 다시 전달된다.
 - 중복은 저장 API 의 멱등성(S13, S14)으로 흡수한다. 계산이 결정적이라 중복 결과의 내용은 같다.
+- 워커가 저장 API 를 시간 초과로 포기했는데 Spring 이 뒤늦게 처리해 커밋해도, 재시도 호출은 이미 완료를 보고 200 을 받는다.
+- 데드레터 큐로 간 메시지는 자동으로 다시 처리하지 않는다. 그 코스는 S10 이 실패로 표시한다.
 - ack 를 기다리는 메시지는 그 컨슈머 한 대만 점유한다. 다른 컨슈머는 다음 메시지를 받는다.
 
 ## 5. PR 분해
@@ -147,7 +170,7 @@
 | 5 | 결과 전달 경로 전환 | S10 ~ S17, F6 ~ F10, R1, R2 | 2, 4 |
 | 6 | 안드로이드 반영 | A1 ~ A3 | 2, 4 |
 
-- PR 4 에서는 응답 큐와 리스너를 남겨두고, 리스너가 결과 저장 시 상태를 완료로 바꾼다. 흐름이 끊기지 않게 하기 위함이다.
+- PR 4 까지는 응답 큐와 리스너를 남겨두고 리스너가 결과 저장 시 상태를 완료로 바꿨다. 흐름이 끊기지 않게 하기 위함이었고, PR 5 에서 둘 다 제거했다.
 - PR 5 는 Spring 과 FastAPI 가 동시에 바뀌어야 해서 하나로 묶는다.
 
 ## 6. 채택하지 않은 것

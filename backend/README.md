@@ -17,9 +17,10 @@ sh gradlew bootRun
 # 3. 스트레스 계산 워커 (Python 3.12)
 cd ../fast-api
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn main:app --port 8000
+env $(cat .env.example | xargs) .venv/bin/uvicorn main:app --port 8000
 ```
 
 - RabbitMQ 관리 콘솔: http://localhost:15672 (scare / scare)
 - Swagger: http://localhost:8080/swagger-ui
 - `.env.example` 의 값은 로컬 전용이다. 운영 접속 정보는 커밋하지 않는다.
+- 이미 있는 `api/.env` 에는 `.env.example` 에 새로 생긴 키(`INTERNAL_API_SECRET` 등)를 직접 옮긴다. 워커는 `SPRING_BASE_URL`, `INTERNAL_API_SECRET` 이 없으면 기동하지 않는다.

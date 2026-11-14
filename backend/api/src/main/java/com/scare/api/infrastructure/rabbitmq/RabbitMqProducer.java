@@ -8,13 +8,15 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
+import com.scare.api.core.config.rabbitmq.RabbitMqConfig;
+
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public final class RabbitMqProducer {
 
-	private static final String REQUEST_QUEUE = "request_queue";
+	private static final String REQUEST_QUEUE = RabbitMqConfig.REQUEST_QUEUE;
 	private static final Duration CONFIRM_TIMEOUT = Duration.ofSeconds(3);
 
 	private final RabbitTemplate rabbitTemplate;

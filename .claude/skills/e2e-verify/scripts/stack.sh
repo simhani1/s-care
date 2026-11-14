@@ -1,5 +1,5 @@
 #!/bin/sh
-# 로컬 스택을 띄우고 내린다. 사용: stack.sh up | down | status | logs
+# 로컬 스택을 띄우고 내린다. 사용: stack.sh up | down | worker | status | logs
 set -eu
 ROOT=$(git rev-parse --show-toplevel)
 BACKEND="$ROOT/backend"
@@ -27,6 +27,20 @@ wait_http() {
   done
 }
 
+start_worker() {
+  if [ -f "$RUN/worker.pid" ]; then
+    pid=$(cat "$RUN/worker.pid")
+    kill "$pid" 2>/dev/null || true
+    while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+  fi
+  cd "$BACKEND/fast-api"
+  secret=${INTERNAL_API_SECRET:-$(sed -n 's/^INTERNAL_API_SECRET=//p' "$BACKEND/api/.env")}
+  SPRING_BASE_URL=${SPRING_BASE_URL:-http://localhost:8080} INTERNAL_API_SECRET=$secret PYTHONUNBUFFERED=1 \
+    nohup .venv/bin/uvicorn main:app --port 8000 >> "$RUN/worker.log" 2>&1 &
+  echo $! > "$RUN/worker.pid"
+  wait_http http://localhost:8000/docs worker
+}
+
 case "${1:-}" in
   up)
     stop
@@ -35,7 +49,7 @@ case "${1:-}" in
     cd "$BACKEND/api"
     [ -f .env ] || cp .env.example .env
     sh gradlew build -x test -q
-    nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -Duser.timezone=Asia/Seoul -jar build/libs/api-0.0.1-SNAPSHOT.jar > "$RUN/spring.log" 2>&1 &
+    OUTBOX_SWEEP_INTERVAL=${OUTBOX_SWEEP_INTERVAL:-PT5S} nohup "${JAVA_HOME:+$JAVA_HOME/bin/}java" -Duser.timezone=Asia/Seoul -jar build/libs/api-0.0.1-SNAPSHOT.jar > "$RUN/spring.log" 2>&1 &
     echo $! > "$RUN/spring.pid"
     cd "$BACKEND/fast-api"
     if [ ! -x .venv/bin/python ]; then
@@ -43,15 +57,18 @@ case "${1:-}" in
       else "$(command -v python3.12 || command -v python3)" -m venv .venv; fi
     fi
     .venv/bin/pip install -q -r requirements.txt
-    PYTHONUNBUFFERED=1 nohup .venv/bin/uvicorn main:app --port 8000 > "$RUN/worker.log" 2>&1 &
-    echo $! > "$RUN/worker.pid"
+    : > "$RUN/worker.log"
+    start_worker
     wait_http http://localhost:8080/api-docs spring
-    wait_http http://localhost:8000/docs worker
     echo "스택 준비 완료. 로그: $RUN"
     ;;
   down)
     stop
     (cd "$BACKEND" && docker compose down -v)
+    ;;
+  worker)
+    start_worker
+    echo "워커 재기동. 로그: $RUN/worker.log"
     ;;
   status)
     (cd "$BACKEND" && docker compose ps --format '{{.Service}} {{.Status}}')
@@ -63,6 +80,6 @@ case "${1:-}" in
     tail -n "${2:-40}" "$RUN/spring.log" "$RUN/worker.log"
     ;;
   *)
-    echo "사용: stack.sh up | down | status | logs [줄 수]" >&2; exit 2
+    echo "사용: stack.sh up | down | worker | status | logs [줄 수]" >&2; exit 2
     ;;
 esac

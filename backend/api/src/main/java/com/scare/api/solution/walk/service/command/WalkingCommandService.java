@@ -16,11 +16,11 @@ import com.scare.api.member.repository.MemberRepository;
 import com.scare.api.member.service.helper.MemberServiceHelper;
 import com.scare.api.solution.walk.domain.WalkingCourse;
 import com.scare.api.solution.walk.domain.WalkingDetail;
+import com.scare.api.solution.walk.exception.InvalidAnalysisResultException;
 import com.scare.api.solution.walk.exception.NoWalkingCourseException;
 import com.scare.api.solution.walk.exception.WalkingCourseDataSaveException;
 import com.scare.api.solution.walk.outbox.Outbox;
 import com.scare.api.solution.walk.outbox.OutboxRepository;
-import com.scare.api.solution.walk.outbox.OutboxStatus;
 import com.scare.api.solution.walk.repository.WalkingCourseRepository;
 import com.scare.api.solution.walk.repository.WalkingDetailRepository;
 import com.scare.api.solution.walk.service.command.dto.SaveWalkingCourseDto;
@@ -128,11 +128,28 @@ public class WalkingCommandService {
 			.build();
 	}
 
-	public void updateBestSection(UpdateBestSectionDto dto) {
+	/*
+	 * 조건부 UPDATE 가 아웃박스 행을 잠그고 최신 커밋 값으로 조건을 평가한다. 동시에 들어온 중복 호출은
+	 * 앞선 트랜잭션의 커밋을 기다린 뒤 COMPLETED 를 보고 0 행을 받으므로, 코스를 갱신하는 것은 1 행을 받은 쪽뿐이다.
+	 * PENDING(발행 후 표시 전 릴레이 중단), FAILED(실패 처리 뒤 늦게 온 결과)도 완료로 받아들인다.
+	 */
+	public void completeAnalysis(UpdateBestSectionDto dto) {
+		long locations = walkingDetailRepository.countLocations(dto.getCourseId()).orElse(0L);
+		if (dto.getEndIdx() >= Math.max(locations, 1)) {
+			throw new InvalidAnalysisResultException("endIdx " + dto.getEndIdx() + " >= locations " + locations);
+		}
+		if (outboxRepository.complete(dto.getCourseId(), LocalDateTime.now()) == 0) {
+			if (!outboxRepository.existsByWalkingCourseId(dto.getCourseId())) {
+				throw new NoWalkingCourseException();
+			}
+			log.info("[WalkingCommandService] analysis result ignored, already completed courseId={}",
+				dto.getCourseId());
+			return;
+		}
 		WalkingCourse course = walkingCourseRepository.findById(dto.getCourseId())
 			.orElseThrow(() -> new NoWalkingCourseException());
 		course.updateBestSection(dto.getMaxStress(), dto.getMinStress(), dto.getHealingStressAvg(), dto.getStartIdx(),
 			dto.getEndIdx());
-		outboxRepository.updateStatusByWalkingCourseId(course.getId(), OutboxStatus.COMPLETED, LocalDateTime.now());
+		log.info("[WalkingCommandService] analysis result applied courseId={}", dto.getCourseId());
 	}
 }

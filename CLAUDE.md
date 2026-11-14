@@ -6,7 +6,7 @@
 
 - 인프라: `cd backend && docker compose up -d --wait`
 - Spring (JDK 21): `cd backend/api && cp .env.example .env && sh gradlew bootRun`. 빌드는 `sh gradlew build -x test`. `gradlew` 에 실행 권한이 없어 `sh` 로 부른다.
-- 워커 (Python 3.12): `cd backend/fast-api && .venv/bin/uvicorn main:app --port 8000`
+- 워커 (Python 3.12): `cd backend/fast-api && env $(cat .env.example | xargs) .venv/bin/uvicorn main:app --port 8000`. `SPRING_BASE_URL`, `INTERNAL_API_SECRET` 이 없으면 기동하지 않는다.
 - 자세한 내용은 `backend/README.md`.
 
 ## 코드 작성
@@ -35,4 +35,7 @@
 | 2026-11-13 | 아웃박스 시나리오(outbox, broker-outage) 추가, basic 이 분석 상태로 완료 판정 | skills/e2e-verify | PR 4 아웃박스와 릴레이 |
 | 2026-11-13 | stop 이 프로세스 종료를 기다림 | skills/e2e-verify/scripts/stack.sh | 종료 중인 Spring 의 create-drop 이 새로 띄운 스택의 테이블을 지움 |
 | 2026-11-13 | concurrent, broker-hang 시나리오 추가 | skills/e2e-verify | PR 4 검증에서 풀 교착과 브로커 무응답 블록이 기존 시나리오에 잡히지 않음 |
+| 2026-11-14 | spring-pause, duplicate, auth, poison, sweep 시나리오 추가, basic 이 큐 구성 확인, stack.sh 가 실패 처리 주기 5초로 기동 | skills/e2e-verify | PR 5 결과 전달 경로 전환 |
 | 2026-11-14 | outbox, broker-hang 시나리오 대기 단축 | skills/e2e-verify | 릴레이를 1초 주기 스케줄러 단일 경로로 전환 |
+| 2026-11-14 | 정정: 릴레이 주기는 10초다(바로 위 행의 1초는 이후 10초로 바뀜) | CLAUDE.md | PR 5 검증 지적 |
+| 2026-11-14 | wrong-secret, sweep-race 시나리오 추가, stack.sh worker 하위 명령과 워커 필수 환경변수 전달, sweep 이 PENDING 은 실패 처리하지 않음을 확인, auth 가 결과 값 검증 확인 | skills/e2e-verify | PR 5 반려(실패 처리 교착, 틀린 비밀의 데드레터 유출) |
