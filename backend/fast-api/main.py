@@ -4,6 +4,7 @@ import http.client
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.request
 from contextlib import asynccontextmanager
@@ -70,7 +71,10 @@ async def handle(message: IncomingMessage, halt, put=put_result, sleep=asyncio.s
     try:
         data = json.loads(message.body)
         course_id = data['courseId']
+        started = time.perf_counter()
         payload = await asyncio.to_thread(analysis_result, data)
+        log.info('calculated courseId=%s samples=%s in %.3fs', course_id, len(data['heartRates']),
+                 time.perf_counter() - started)
     except Exception as e:
         log.warning('calculation failed, dead-lettering courseId=%s: %r', course_id, e)
         await message.reject(requeue=False)
@@ -78,8 +82,9 @@ async def handle(message: IncomingMessage, halt, put=put_result, sleep=asyncio.s
 
     status = None
     for delay in (*RETRY_DELAYS, None):
+        started = time.perf_counter()
         status = await asyncio.to_thread(put, course_id, payload)
-        log.info('PUT courseId=%s status=%s', course_id, status)
+        log.info('PUT courseId=%s status=%s in %.3fs', course_id, status, time.perf_counter() - started)
         if status == 200:
             await message.ack()
             log.info('acked courseId=%s', course_id)
