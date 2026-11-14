@@ -47,14 +47,3 @@ Samsung Health SDK 가 스트레스 지수를 제공하지 않아, 실시간 심
 <div align='center'>
   <img src='docs/images/architecture.png' width='800px' >
 </div>
-
-## 로컬 실행
-
-MySQL, RabbitMQ, Redis 는 docker compose 로 띄우고 Spring API 와 스트레스 계산 워커는 호스트에서 실행합니다. 자세한 방법은 [backend/README.md](backend/README.md) 에 있습니다.
-
-```bash
-cd backend && docker compose up -d --wait
-cd api && cp .env.example .env && sh gradlew bootRun
-cd ../fast-api && python -m venv .venv && .venv/bin/pip install -r requirements.txt
-env $(cat .env.example | xargs) .venv/bin/uvicorn main:app --port 8000
-```
