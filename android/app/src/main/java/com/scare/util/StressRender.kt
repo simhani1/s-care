@@ -13,8 +13,8 @@ import com.scare.ui.theme.medium
 @Composable
 fun getPetImage(stress: Int): Painter {
     val petImage = when {
-        stress <= 20 -> R.drawable.happy_dog
-        stress <= 40 -> R.drawable.soso_dog
+        stress < 20 -> R.drawable.happy_dog
+        stress < 40 -> R.drawable.soso_dog
         else -> R.drawable.gloomy_dog
     }
 
@@ -26,8 +26,8 @@ fun getPetImage(stress: Int): Painter {
 fun getPetFace(stress: Int): Painter {
     val petFace = when {
         stress == -1 -> R.drawable.no_stress_data
-        stress <= 20 -> R.drawable.happy_dog_face
-        stress <= 40 -> R.drawable.normal_dog_face
+        stress < 20 -> R.drawable.happy_dog_face
+        stress < 40 -> R.drawable.normal_dog_face
         else -> R.drawable.gloomy_dog_face
     }
 
@@ -37,8 +37,8 @@ fun getPetFace(stress: Int): Painter {
 
 fun getStressLevel(stress:Int): String {
     val stressText = when {
-        stress <= 20 -> "낮음"
-        stress <= 40 -> "보통"
+        stress < 20 -> "낮음"
+        stress < 40 -> "보통"
         else -> "높음"
     }
 
@@ -58,8 +58,8 @@ fun getTextColor(stressLevel: String): Color {
 fun getStressColor(stress:Int): Pair<Color, Boolean> {
     val stressColor = when {
         stress <= 0 -> Pair(Color.Transparent, true)
-        stress <= 20 -> Pair(low, false)
-        stress <= 40 -> Pair(medium, false)
+        stress < 20 -> Pair(low, false)
+        stress < 40 -> Pair(medium, false)
         else -> Pair(high, false)
     }
 
@@ -72,8 +72,8 @@ val happySentence = listOf("기분이 좋은 날이네", "완전 행복해")
 
 fun getStressSentence(stress: Int): String {
     val stressSentence = when {
-        stress <= 20 -> happySentence.random()
-        stress in 21..50 -> normalSentence.random()
+        stress < 20 -> happySentence.random()
+        stress < 40 -> normalSentence.random()
         else -> groomySentence.random()
     }
     return stressSentence
