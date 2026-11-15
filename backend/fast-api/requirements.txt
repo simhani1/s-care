@@ -4,3 +4,5 @@ fastapi~=0.115.4
 pydantic~=2.9.2
 uvicorn>=0.22.0
 aio-pika~=9.4.3
+pyhrv~=0.4.1
+peakutils
