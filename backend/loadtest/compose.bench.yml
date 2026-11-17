@@ -1,0 +1,52 @@
+# CPU 를 제한한 계산기. 사용: cd backend && docker compose -f docker-compose.yml -f loadtest/compose.bench.yml --profile queue up -d --scale worker=2
+# sync 프로필(calc, lb)은 bench/sync-baseline 브랜치의 sync_app.py 가 있어야 뜬다.
+x-calc: &calc
+  build: fast-api
+  image: scare-bench-calc
+  cpus: ${CALC_CPUS:-1}
+  environment:
+    PYTHONUNBUFFERED: "1"
+    STRESS_ALGO: ${STRESS_ALGO:-window}
+    RABBITMQ_URL: amqp://scare:scare@rabbitmq:5672/
+    SPRING_BASE_URL: http://host.docker.internal:8080
+    INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-local-dev-only-internal-secret}
+  extra_hosts: ["host.docker.internal:host-gateway"]
+
+services:
+  worker:
+    <<: *calc
+    profiles: [queue]
+    depends_on:
+      rabbitmq: {condition: service_healthy}
+
+  calc:
+    <<: *calc
+    profiles: [sync]
+    command: ["uvicorn", "sync_app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  lb:
+    image: nginx:1.27-alpine
+    profiles: [sync]
+    ports: ["8000:8000"]
+    volumes: ["./loadtest/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: [calc]
+
+  # 박스 전체 예산 변형: Spring 도 CPU 를 제한한 컨테이너로 띄운다(호스트 Spring 은 내린다). 빌드된 jar 를 쓴다.
+  api:
+    image: eclipse-temurin:21-jre
+    profiles: [fullstack]
+    cpus: ${API_CPUS:-1}
+    working_dir: /app
+    command: ["java", "-Duser.timezone=Asia/Seoul", "-jar", "/app/api.jar"]
+    volumes: ["./api/build/libs/api-0.0.1-SNAPSHOT.jar:/app/api.jar:ro", "./api/.env:/app/.env:ro"]
+    ports: ["8080:8080"]
+    environment:
+      LOCAL_MYSQL_URL: jdbc:mysql://mysql:3306/scare?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      RABBITMQ_URL: rabbitmq
+      SPRING_DATA_REDIS_HOST: redis
+      FAST_API_BASE_URL: http://lb:8000
+      STRESS_ENDPOINT: /fast/stress/overview
+      OUTBOX_SWEEP_INTERVAL: PT5S
+    depends_on:
+      mysql: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
